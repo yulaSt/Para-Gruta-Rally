@@ -17,6 +17,10 @@ const PROJECT_ID = 'test-project';
 const FIREBASE_JSON = resolve(__dirname, '../firebase.json');
 let testEnv: RulesTestEnvironment;
 
+const hasFirestoreEmulator =
+  Boolean(process.env.FIRESTORE_EMULATOR_HOST) || Boolean(process.env.FIREBASE_EMULATOR_HUB);
+const describeWithFirestoreEmulator = hasFirestoreEmulator ? describe : describe.skip;
+
 // Helper to set up an admin user in the database
 async function setupAdminUser(userId: string) {
   await testEnv.withSecurityRulesDisabled(async (context) => {
@@ -91,39 +95,40 @@ async function setupFormAssignment(assignmentId: string, userId: string) {
   });
 }
 
-beforeAll(async () => {
-  const { host, port } = getFirestoreCoverageMeta(PROJECT_ID, FIREBASE_JSON);
-  testEnv = await initializeTestEnvironment({
-    projectId: PROJECT_ID,
-    firestore: {
-      port,
-      host,
-      rules: readFileSync(resolve(__dirname, '../firebase/firestore.rules'), 'utf8'),
-    },
-  });
-});
-
-beforeEach(async () => {
-  await testEnv.clearFirestore();
-});
-
-afterAll(async () => {
-  const { coverageUrl } = getFirestoreCoverageMeta(PROJECT_ID, FIREBASE_JSON);
-  const coverageFile = './firestore-coverage.html';
-  const fstream = createWriteStream(coverageFile);
-  await new Promise<void>((resolve, reject) => {
-    get(coverageUrl, (res) => {
-      res.pipe(fstream, { end: true });
-      res.on('end', resolve);
-      res.on('error', reject);
+describeWithFirestoreEmulator('Firestore rules', () => {
+  beforeAll(async () => {
+    const { host, port } = getFirestoreCoverageMeta(PROJECT_ID, FIREBASE_JSON);
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: {
+        port,
+        host,
+        rules: readFileSync(resolve(__dirname, '../firebase/firestore.rules'), 'utf8'),
+      },
     });
   });
-  console.log(`View firestore rule coverage information at ${coverageFile}\n`);
-  await testEnv.cleanup();
-});
 
-// ==================== USERS COLLECTION ====================
-describe('Users collection', () => {
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+  });
+
+  afterAll(async () => {
+    const { coverageUrl } = getFirestoreCoverageMeta(PROJECT_ID, FIREBASE_JSON);
+    const coverageFile = './firestore-coverage.html';
+    const fstream = createWriteStream(coverageFile);
+    await new Promise<void>((resolve, reject) => {
+      get(coverageUrl, (res) => {
+        res.pipe(fstream, { end: true });
+        res.on('end', resolve);
+        res.on('error', reject);
+      });
+    });
+    console.log(`View firestore rule coverage information at ${coverageFile}\n`);
+    await testEnv.cleanup();
+  });
+
+  // ==================== USERS COLLECTION ====================
+  describe('Users collection', () => {
   test('unauthenticated users cannot read user data', async () => {
     await setupRegularUser('alice');
     const db = testEnv.unauthenticatedContext().firestore();
@@ -175,7 +180,7 @@ describe('Users collection', () => {
       db.collection('users').doc('alice').update({ name: 'Updated by Admin' })
     );
   });
-});
+  });
 
 // ==================== BACKUPS COLLECTION ====================
 describe('Backups collection', () => {
@@ -208,7 +213,7 @@ describe('Backups collection', () => {
       db.collection('backups').doc('backup1').set({ date: new Date().toISOString() })
     );
   });
-});
+  });
 
 // ==================== KIDS COLLECTION ====================
 describe('Kids collection', () => {
@@ -266,7 +271,7 @@ describe('Kids collection', () => {
       db.collection('kids').doc('kid1').update({ name: 'Admin Updated' })
     );
   });
-});
+  });
 
 // ==================== TEAMS COLLECTION ====================
 describe('Teams collection', () => {
@@ -695,4 +700,6 @@ describe('Form assignments collection', () => {
       })
     );
   });
+});
+
 });

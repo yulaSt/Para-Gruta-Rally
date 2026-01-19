@@ -14,12 +14,12 @@ Conventions used in this repo:
 - **Why:** A small break here blocks the whole app.
 - **New spec:** `test/routing/ProtectedRoute.ui.spec.tsx`
 - **Scenarios:**
-  - [ ] Shows loading UI when auth/permissions are loading.
-  - [ ] Redirects unauthenticated users to `/login` (preserves `from` in router state).
-  - [ ] Allows access when authenticated and no role requirement.
-  - [ ] Denies access when role missing and shows “Access Denied”.
-  - [ ] “Go to Dashboard” button navigates to role-based dashboard (`window.location.href`).
-  - [ ] `RequireInstructorOnly`: admin is denied when `strictRole` is true.
+  - [x] Shows loading UI when auth/permissions are loading.
+  - [x] Redirects unauthenticated users to `/login` (preserves `from` in router state).
+  - [x] Allows access when authenticated and no role requirement.
+  - [x] Denies access when role missing and shows "Access Denied".
+  - [x] "Go to Dashboard" button navigates to role-based dashboard (`window.location.href`).
+  - [x] `RequireInstructorOnly`: admin is denied when `strictRole` is true.
 - **Mocking notes:** mock `useAuth()` and `usePermissions()`; render with `MemoryRouter` + `Routes`.
 
 ### 2) Admin users table: sorting + delete confirmation flow
@@ -27,19 +27,19 @@ Conventions used in this repo:
 - **Why:** High-risk destructive action; needs confidence.
 - **New spec:** `test/tables/UsersTable.ui.spec.tsx`
 - **Scenarios:**
-  - [ ] Sort toggles per header click: `asc` → `desc` → reset; order updates accordingly.
-  - [ ] Clicking “Delete” opens confirmation modal with correct user details.
-  - [ ] Clicking overlay (outside modal) cancels and closes.
-  - [ ] Confirm calls `deleteUserCompletely(user.id)` and then calls `onUserDeleted`.
-  - [ ] Error path: service rejects; shows error alert and does not call `onUserDeleted`.
+  - [x] Sort toggles per header click: `asc` → `desc` → reset; order updates accordingly.
+  - [x] Clicking "Delete" opens confirmation modal with correct user details.
+  - [x] Clicking overlay (outside modal) cancels and closes.
+  - [x] Confirm calls `deleteUserCompletely(user.id)` and then calls `onUserDeleted`.
+  - [x] Error path: service rejects; shows error alert and does not call `onUserDeleted`.
 - **Mocking notes:** mock `@/services/userService.js`; stub `window.alert`.
 
 ### 3) Role redirect handler (if used for post-login navigation)
 - **Target:** `src/components/routing/RoleRedirectHandler.jsx`
 - **New spec:** `test/routing/RoleRedirectHandler.ui.spec.tsx`
 - **Scenarios:**
-  - [ ] Navigates to correct dashboard for each role.
-  - [ ] Handles missing/unknown role safely (e.g., to `/login`).
+  - [x] Navigates to correct dashboard for each role.
+  - [x] Handles missing/unknown role safely (e.g., to `/login`).
 
 ## P1 — key user workflows (forms + dashboards)
 

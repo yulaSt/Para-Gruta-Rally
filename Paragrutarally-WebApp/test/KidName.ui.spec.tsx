@@ -20,29 +20,34 @@ const FIRESTORE_RULES = readFileSync(resolve(process.cwd(), 'firebase/firestore.
 
 let testEnv: RulesTestEnvironment;
 
-beforeAll(async () => {
-  const emulator = parseHostAndPort(process.env.FIRESTORE_EMULATOR_HOST) ?? { host: '127.0.0.1', port: 8080 };
+const hasFirestoreEmulator =
+  Boolean(process.env.FIRESTORE_EMULATOR_HOST) || Boolean(process.env.FIREBASE_EMULATOR_HUB);
+const describeWithFirestoreEmulator = hasFirestoreEmulator ? describe : describe.skip;
 
-  testEnv = await initializeTestEnvironment({
-    projectId: PROJECT_ID,
-    firestore: {
-      host: emulator.host,
-      port: emulator.port,
-      rules: FIRESTORE_RULES,
-    },
+describeWithFirestoreEmulator('React + Firestore emulator integration', () => {
+  beforeAll(async () => {
+    const emulator =
+      parseHostAndPort(process.env.FIRESTORE_EMULATOR_HOST) ?? { host: '127.0.0.1', port: 8080 };
+
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: {
+        host: emulator.host,
+        port: emulator.port,
+        rules: FIRESTORE_RULES,
+      },
+    });
   });
-});
 
-beforeEach(async () => {
-  await testEnv.clearFirestore();
-  if (auth.currentUser) await signOut(auth);
-});
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+    if (auth.currentUser) await signOut(auth);
+  });
 
-afterAll(async () => {
-  await testEnv.cleanup();
-});
+  afterAll(async () => {
+    await testEnv.cleanup();
+  });
 
-describe('React + Firestore emulator integration', () => {
   test('renders kid name from Firestore (authenticated user)', async ({ expect }) => {
     const kidId = 'kid_ava';
 
@@ -60,4 +65,3 @@ describe('React + Firestore emulator integration', () => {
     expect(screen.getByRole('heading', { name: /kid: ava test/i })).toBeInTheDocument();
   });
 });
-

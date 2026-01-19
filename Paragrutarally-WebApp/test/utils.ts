@@ -22,9 +22,10 @@ export function getFirestoreCoverageMeta(projectId: string, firebaseJsonPath: st
   const { emulators } = require(firebaseJsonPath);
   const hostAndPort = parseHostAndPort(process.env.FIRESTORE_EMULATOR_HOST);
   const { host, port } = hostAndPort ?? emulators.firestore;
-  const coverageUrl = `http://${host}:${port}/emulator/v1/projects/${projectId}:ruleCoverage.html`;
+  const normalizedHost = host || '127.0.0.1';
+  const coverageUrl = `http://${normalizedHost}:${port}/emulator/v1/projects/${projectId}:ruleCoverage.html`;
   return {
-    host,
+    host: normalizedHost,
     port,
     coverageUrl,
   };
@@ -38,7 +39,7 @@ export function getStorageEmulatorMeta(firebaseJsonPath: string) {
   const hostAndPort = parseHostAndPort(process.env.FIREBASE_STORAGE_EMULATOR_HOST);
   const { host, port } = hostAndPort ?? emulators.storage;
   return {
-    host,
+    host: host || '127.0.0.1',
     port,
   };
 }

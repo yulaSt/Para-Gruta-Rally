@@ -333,8 +333,19 @@ const UsersTable = ({ users, isLoading, onUpdateUser, onUserDeleted }) => {
 
             {/* Delete Confirmation Modal */}
             {showDeleteModal && userToDelete && (
-                <div className="modal-overlay active" onClick={handleDeleteCancel}>
-                    <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
+                <div
+                    className="modal-overlay active"
+                    data-testid="delete-user-modal-overlay"
+                    onClick={handleDeleteCancel}
+                >
+                    <div
+                        className="modal-content delete-modal"
+                        data-testid="delete-user-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={t('users.deleteUserTitle', 'Delete User')}
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="modal-header danger">
                             <AlertTriangle className="danger-icon" size={24} />
                             <h2>{t('users.deleteUserTitle', 'Delete User')}</h2>

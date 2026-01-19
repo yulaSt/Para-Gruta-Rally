@@ -13,32 +13,36 @@ const PROJECT_ID = 'test-project';
 const FIREBASE_JSON = resolve(__dirname, '../firebase.json');
 let testEnv: RulesTestEnvironment;
 
+const hasStorageEmulator =
+  Boolean(process.env.FIREBASE_STORAGE_EMULATOR_HOST) || Boolean(process.env.FIREBASE_EMULATOR_HUB);
+const describeWithStorageEmulator = hasStorageEmulator ? describe : describe.skip;
+
 function bytes(size: number) {
   return new Uint8Array(size).fill(7);
 }
 
-beforeAll(async () => {
-  const { host: storageHost, port: storagePort } = getStorageEmulatorMeta(FIREBASE_JSON);
+describeWithStorageEmulator('Storage rules', () => {
+  beforeAll(async () => {
+    const { host: storageHost, port: storagePort } = getStorageEmulatorMeta(FIREBASE_JSON);
 
-  testEnv = await initializeTestEnvironment({
-    projectId: PROJECT_ID,
-    storage: {
-      host: storageHost,
-      port: storagePort,
-      rules: readFileSync(resolve(__dirname, '../firebase/storage.rules'), 'utf8'),
-    },
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      storage: {
+        host: storageHost,
+        port: storagePort,
+        rules: readFileSync(resolve(__dirname, '../firebase/storage.rules'), 'utf8'),
+      },
+    });
   });
-});
 
-beforeEach(async () => {
-  await testEnv.clearStorage();
-});
+  beforeEach(async () => {
+    await testEnv.clearStorage();
+  });
 
-afterAll(async () => {
-  await testEnv.cleanup();
-});
+  afterAll(async () => {
+    await testEnv.cleanup();
+  });
 
-describe('Storage rules', () => {
   test('default: unauthenticated user cannot read gallery files', async () => {
     const staffStorage = testEnv.authenticatedContext('staff1', { role: 'staff' }).storage();
     await expectStoragePermissionSucceeds(
