@@ -1,7 +1,7 @@
 // src/firebase/config.js
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
 // Firebase configuration using Vite environment variables
@@ -20,4 +20,10 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-export { db, auth, storage };
+
+if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099");
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+}
+
+export {db, auth, storage};

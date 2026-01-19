@@ -3,10 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Helper function to check if user is admin
     function isAdmin() {
-      return request.auth != null && 
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
