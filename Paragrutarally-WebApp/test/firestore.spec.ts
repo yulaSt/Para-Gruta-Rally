@@ -98,7 +98,7 @@ beforeAll(async () => {
     firestore: {
       port,
       host,
-      rules: readFileSync(resolve(__dirname, '../firestore.rules'), 'utf8'),
+      rules: readFileSync(resolve(__dirname, '../firebase/firestore.rules'), 'utf8'),
     },
   });
 });
@@ -184,6 +184,11 @@ describe('Backups collection', () => {
     await expectFirestorePermissionDenied(db.collection('backups').doc('backup1').get());
   });
 
+  test('authenticated user without user doc cannot access backups', async () => {
+    const db = testEnv.authenticatedContext('noUserDoc').firestore();
+    await expectFirestorePermissionDenied(db.collection('backups').doc('backup1').get());
+  });
+
   test('regular user cannot access backups', async () => {
     await setupRegularUser('alice');
     const db = testEnv.authenticatedContext('alice').firestore();
@@ -217,6 +222,22 @@ describe('Kids collection', () => {
     await setupKid('kid1', 'bob');
     const db = testEnv.authenticatedContext('alice').firestore();
     await expectPermissionGetSucceeds(db.collection('kids').doc('kid1').get());
+  });
+
+  test('regular user cannot create kid records', async () => {
+    await setupRegularUser('parent1');
+    const db = testEnv.authenticatedContext('parent1').firestore();
+    await expectFirestorePermissionDenied(
+      db.collection('kids').doc('kid1').set({ name: 'New Kid', parentInfo: { parentId: 'parent1' } })
+    );
+  });
+
+  test('admin can create kid records', async () => {
+    await setupAdminUser('admin');
+    const db = testEnv.authenticatedContext('admin').firestore();
+    await expectFirestorePermissionSucceeds(
+      db.collection('kids').doc('kid1').set({ name: 'New Kid', parentInfo: { parentId: 'parent1' } })
+    );
   });
 
   test('parent can update their own kid', async () => {
@@ -259,6 +280,22 @@ describe('Teams collection', () => {
     await setupTeam('team1', ['instructor1']);
     const db = testEnv.authenticatedContext('alice').firestore();
     await expectPermissionGetSucceeds(db.collection('teams').doc('team1').get());
+  });
+
+  test('non-admin cannot create teams', async () => {
+    await setupRegularUser('instructor1');
+    const db = testEnv.authenticatedContext('instructor1').firestore();
+    await expectFirestorePermissionDenied(
+      db.collection('teams').doc('team1').set({ name: 'New Team', instructorIds: ['instructor1'] })
+    );
+  });
+
+  test('admin can create teams', async () => {
+    await setupAdminUser('admin');
+    const db = testEnv.authenticatedContext('admin').firestore();
+    await expectFirestorePermissionSucceeds(
+      db.collection('teams').doc('team1').set({ name: 'New Team', instructorIds: ['instructor1'] })
+    );
   });
 
   test('instructor can update their team', async () => {
@@ -321,6 +358,11 @@ describe('Events collection', () => {
 
 // ==================== INSTRUCTORS COLLECTION ====================
 describe('Instructors collection', () => {
+  test('unauthenticated users cannot read instructors', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await expectFirestorePermissionDenied(db.collection('instructors').doc('inst1').get());
+  });
+
   test('authenticated user can read instructors', async () => {
     await setupRegularUser('alice');
     const db = testEnv.authenticatedContext('alice').firestore();
@@ -346,6 +388,11 @@ describe('Instructors collection', () => {
 
 // ==================== EVENT PARTICIPANTS COLLECTION ====================
 describe('EventParticipants collection', () => {
+  test('unauthenticated users cannot read event participants', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await expectFirestorePermissionDenied(db.collection('eventParticipants').doc('part1').get());
+  });
+
   test('authenticated user can read event participants', async () => {
     await setupRegularUser('alice');
     const db = testEnv.authenticatedContext('alice').firestore();
@@ -394,6 +441,11 @@ describe('Reports collection', () => {
 
 // ==================== VEHICLES COLLECTION ====================
 describe('Vehicles collection', () => {
+  test('unauthenticated users cannot read vehicles', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await expectFirestorePermissionDenied(db.collection('vehicles').doc('vehicle1').get());
+  });
+
   test('authenticated user can read vehicles', async () => {
     await setupRegularUser('alice');
     const db = testEnv.authenticatedContext('alice').firestore();
@@ -419,6 +471,11 @@ describe('Vehicles collection', () => {
 
 // ==================== FORMS COLLECTION ====================
 describe('Forms collection', () => {
+  test('unauthenticated user cannot read forms', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await expectFirestorePermissionDenied(db.collection('forms').doc('form1').get());
+  });
+
   test('authenticated user can read forms', async () => {
     await setupRegularUser('alice');
     const db = testEnv.authenticatedContext('alice').firestore();
@@ -445,9 +502,7 @@ describe('Forms collection', () => {
     await setupRegularUser('alice');
     await setupForm('form1', 'alice', ['instructor']);
     const db = testEnv.authenticatedContext('alice').firestore();
-    await expectFirestorePermissionSucceeds(
-      db.collection('forms').doc('form1').update({ title: 'Updated Form' })
-    );
+    await expectFirestorePermissionDenied(db.collection('forms').doc('form1').update({ title: 'Updated Form' }));
   });
 
   test('admin can update any form', async () => {
@@ -457,6 +512,31 @@ describe('Forms collection', () => {
     await expectFirestorePermissionSucceeds(
       db.collection('forms').doc('form1').update({ title: 'Admin Updated' })
     );
+  });
+
+  test('authenticated user can increment viewCount only', async () => {
+    await setupRegularUser('alice');
+    await setupForm('form1', 'admin', ['instructor']);
+    const db = testEnv.authenticatedContext('alice').firestore();
+    await expectFirestorePermissionSucceeds(
+      db.collection('forms').doc('form1').update({ viewCount: 1, updatedAt: new Date().toISOString() })
+    );
+  });
+
+  test('authenticated user cannot update viewCount with extra fields', async () => {
+    await setupRegularUser('alice');
+    await setupForm('form1', 'admin', ['instructor']);
+    const db = testEnv.authenticatedContext('alice').firestore();
+    await expectFirestorePermissionDenied(
+      db.collection('forms').doc('form1').update({ viewCount: 1, title: 'Hacked' })
+    );
+  });
+
+  test('authenticated user cannot increment submissionCount', async () => {
+    await setupRegularUser('alice');
+    await setupForm('form1', 'admin', ['instructor']);
+    const db = testEnv.authenticatedContext('alice').firestore();
+    await expectFirestorePermissionDenied(db.collection('forms').doc('form1').update({ submissionCount: 1 }));
   });
 
   test('regular user cannot delete forms', async () => {
@@ -529,6 +609,24 @@ describe('Form submissions collection', () => {
     const db = testEnv.authenticatedContext('alice').firestore();
     await expectFirestorePermissionSucceeds(
       db.collection('form_submissions').doc('sub1').update({ data: { answer: 'updated' } })
+    );
+  });
+
+  test('user cannot change submitterId on their own submission', async () => {
+    await setupRegularUser('alice');
+    await setupFormSubmission('sub1', 'alice');
+    const db = testEnv.authenticatedContext('alice').firestore();
+    await expectFirestorePermissionDenied(
+      db.collection('form_submissions').doc('sub1').update({ submitterId: 'bob' })
+    );
+  });
+
+  test('user cannot update other user submission', async () => {
+    await setupRegularUser('alice');
+    await setupFormSubmission('sub1', 'bob');
+    const db = testEnv.authenticatedContext('alice').firestore();
+    await expectFirestorePermissionDenied(
+      db.collection('form_submissions').doc('sub1').update({ data: { answer: 'hacked' } })
     );
   });
 

@@ -1,6 +1,7 @@
 // functions/index.js - Callable Functions (2nd Gen)
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { setGlobalOptions } from 'firebase-functions/v2';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -16,6 +17,39 @@ initializeApp();
 
 const auth = getAuth();
 const firestore = getFirestore();
+
+/**
+ * Sync role stored in Firestore `users/{uid}.role` into an Auth custom claim `role`.
+ * Storage rules rely on `request.auth.token.role`.
+ */
+export const syncUserRoleClaim = onDocumentWritten('users/{userId}', async (event) => {
+    const { userId } = event.params;
+    const after = event.data?.after;
+    const role = after?.exists ? after.data()?.role : null;
+
+    const allowedRoles = new Set(['admin', 'staff', 'instructor', 'parent', 'guest']);
+    const normalizedRole = typeof role === 'string' && allowedRoles.has(role) ? role : null;
+
+    try {
+        const userRecord = await auth.getUser(userId);
+        const existingClaims = userRecord.customClaims || {};
+        const nextClaims = { ...existingClaims };
+
+        if (normalizedRole == null) {
+            delete nextClaims.role;
+        } else {
+            nextClaims.role = normalizedRole;
+        }
+
+        await auth.setCustomUserClaims(userId, nextClaims);
+    } catch (error) {
+        if (error?.code === 'auth/user-not-found') {
+            return;
+        }
+        console.error('Failed to sync custom role claim:', { userId, error: error?.message || error });
+        throw error;
+    }
+});
 
 /**
  * Callable Cloud Function to delete a user (Admin only)

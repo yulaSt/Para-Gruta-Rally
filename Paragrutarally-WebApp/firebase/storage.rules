@@ -9,19 +9,18 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function tokenRole() {
+      return isSignedIn() && request.auth.token.keys().hasAny(['role'])
+        ? request.auth.token.role
+        : null;
+    }
+
     function isAdmin() {
-      return isSignedIn() &&
-        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return tokenRole() == 'admin';
     }
 
     function isStaff() {
-      return isSignedIn() &&
-        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-        (
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'staff' ||
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        );
+      return tokenRole() == 'staff' || tokenRole() == 'admin';
     }
 
     function isOwner(userId) {
@@ -51,6 +50,11 @@ service firebase.storage {
              request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
+    // Content type validation for JSON files
+    function isJsonFile() {
+      return request.resource.contentType.matches('application/json');
+    }
+
     // Default rules - deny access
     match /{allPaths=**} {
       allow read, write: if false;
@@ -65,15 +69,12 @@ service firebase.storage {
                     isOwner(userId);
     }
 
-    // Form attachments - creators and staff can read, only creators can write
+    // Form attachments - staff can read/write
     match /forms/{formId}/attachments/{fileName} {
-      allow read: if isSignedIn() &&
-                  (isStaff() ||
-                   request.auth.uid == firestore.get(/databases/(default)/documents/formSubmissions/$(formId)).data.submittedBy);
-      allow write: if isSignedIn() &&
+      allow read: if isStaff();
+      allow write: if isStaff() &&
                    isValidFileSize() &&
-                   (isDocumentFile() || isImageFile()) &&
-                   request.auth.uid == firestore.get(/databases/(default)/documents/formSubmissions/$(formId)).data.submittedBy;
+                   (isDocumentFile() || isImageFile());
     }
 
     // User profile images - owners and staff can read, only owners can write
@@ -87,6 +88,30 @@ service firebase.storage {
 
     // Team images - all signed-in users can read, only staff can write
     match /teams/{teamId}/images/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isStaff() &&
+                   isValidFileSize() &&
+                   isImageFile();
+    }
+
+    // Gallery files - all signed-in users can read, only staff can write
+    match /gallery/events/{eventName}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isStaff() &&
+                   isValidFileSize() &&
+                   (isImageFile() || (fileName == '.folder_info.json' && isJsonFile()));
+    }
+
+    // Kid profile photos - all signed-in users can read, only staff can write
+    match /kidsPFP/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isStaff() &&
+                   isValidFileSize() &&
+                   isImageFile();
+    }
+
+    // Vehicle photos - all signed-in users can read, only staff can write
+    match /vehiclePhotos/{fileName} {
       allow read: if isSignedIn();
       allow write: if isStaff() &&
                    isValidFileSize() &&

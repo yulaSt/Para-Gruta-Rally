@@ -33,7 +33,7 @@
     ]
   },
   "storage": {
-    "rules": "storage.rules"
+    "rules": "firebase/storage.rules"
   },
   "emulators": {
     "auth": {

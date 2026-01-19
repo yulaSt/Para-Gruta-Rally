@@ -31,6 +31,19 @@ export function getFirestoreCoverageMeta(projectId: string, firebaseJsonPath: st
 }
 
 /**
+ * Get Storage emulator metadata.
+ */
+export function getStorageEmulatorMeta(firebaseJsonPath: string) {
+  const { emulators } = require(firebaseJsonPath);
+  const hostAndPort = parseHostAndPort(process.env.FIREBASE_STORAGE_EMULATOR_HOST);
+  const { host, port } = hostAndPort ?? emulators.storage;
+  return {
+    host,
+    port,
+  };
+}
+
+/**
  * Assert that a Firestore operation is denied.
  */
 export async function expectFirestorePermissionDenied(promise: Promise<unknown>) {
@@ -52,4 +65,27 @@ export async function expectFirestorePermissionSucceeds(promise: Promise<unknown
 export async function expectPermissionGetSucceeds(promise: Promise<unknown>) {
   const result = await assertSucceeds(promise);
   expect(result).toBeDefined();
+}
+
+/**
+ * Assert that a Storage operation is denied.
+ */
+export async function expectStoragePermissionDenied(promise: Promise<unknown>) {
+  const errorResult = await assertFails(promise);
+  expect(
+    [
+      'storage/unauthorized',
+      'storage/permission-denied',
+      'permission-denied',
+      'PERMISSION_DENIED',
+      'unauthorized',
+    ].some((code) => errorResult.code === code)
+  ).toBe(true);
+}
+
+/**
+ * Assert that a Storage operation succeeds.
+ */
+export async function expectStoragePermissionSucceeds(promise: Promise<unknown>) {
+  await assertSucceeds(promise);
 }
