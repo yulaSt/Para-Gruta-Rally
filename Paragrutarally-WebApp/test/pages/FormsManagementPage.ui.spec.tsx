@@ -271,7 +271,32 @@ describe('FormsManagementPage', () => {
       });
 
       expect(screen.getByTestId('edit-modal-form-title')).toHaveTextContent('Event Registration Form');
+
+      // VERIFY: The view modal should NOT be open (stopPropagation check)
+      expect(screen.queryByTestId('form-view-modal')).not.toBeInTheDocument();
     });
+
+    test('action buttons do not trigger card click (stopPropagation)', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+      renderFormsManagementPage();
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Event Registration Form' })).toBeInTheDocument();
+      });
+
+      const formCard = screen.getByRole('heading', { name: 'Event Registration Form' }).closest('.form-card') as HTMLElement;
+      const deleteButton = within(formCard).getByRole('button', { name: /delete/i });
+
+      // Click delete button
+      // We mock confirm to return false so we don't actually delete, we just want to check stopPropagation
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      await user.click(deleteButton);
+
+      // FormViewModal should NOT be open
+      expect(screen.queryByTestId('form-view-modal')).not.toBeInTheDocument();
+    });
+
   });
 
   describe('form delete functionality', () => {
@@ -372,5 +397,32 @@ describe('FormsManagementPage', () => {
 
       consoleError.mockRestore();
     });
+
+    test('error banner close button clears error state', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+      mockedGetAllForms.mockRejectedValue(new Error('Failed to load forms'));
+      mockedGetAllSubmissionsWithDetails.mockRejectedValue(new Error('Failed to load submissions'));
+
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      renderFormsManagementPage();
+
+      // Wait for error
+      await waitFor(() => {
+        expect(screen.getByText('Unable to load forms data. Please check your connection and try again.')).toBeInTheDocument();
+      });
+
+      // Find close button by title
+      const closeButton = screen.getByTitle('Dismiss error');
+      await user.click(closeButton);
+
+      // Verify error is gone
+      await waitFor(() => {
+        expect(screen.queryByText('Unable to load forms data. Please check your connection and try again.')).not.toBeInTheDocument();
+      });
+
+      consoleError.mockRestore();
+    });
+
   });
 });

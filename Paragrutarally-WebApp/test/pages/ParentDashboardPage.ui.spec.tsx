@@ -48,8 +48,12 @@ vi.mock('@/components/layout/Dashboard', () => ({
 }));
 
 // Mock ParentKidEditModal
+const mockEditModal = vi.fn();
 vi.mock('@/components/modals/ParentKidEditModal', () => ({
-  default: () => <div data-testid="parent-kid-edit-modal" />,
+  default: (props: any) => {
+    mockEditModal(props);
+    return props.isOpen ? <div data-testid="parent-kid-edit-modal">Edit Modal</div> : null;
+  },
 }));
 
 import { usePermissions } from '@/hooks/usePermissions';
@@ -340,7 +344,7 @@ describe('ParentDashboardPage', () => {
 
     test('"Save" shows error on failure and keeps edit mode', async () => {
       const user = userEvent.setup({ pointerEventsCheck: 0 });
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
 
       // Make updateDoc reject
       mockUpdateDoc.mockRejectedValue(new Error('Permission denied'));
@@ -420,7 +424,7 @@ describe('ParentDashboardPage', () => {
   describe('loading and error states', () => {
     test('shows loading state while data is being fetched', async () => {
       // Make getDocs never resolve during this test
-      mockGetDocs.mockImplementation(() => new Promise(() => {}));
+      mockGetDocs.mockImplementation(() => new Promise(() => { }));
 
       renderParentDashboard();
 
@@ -483,6 +487,41 @@ describe('ParentDashboardPage', () => {
       // Pending: 1 (Oliver) - in the .stat-card.kids card
       const pendingCard = statsGrid.querySelector('.stat-card.kids') as HTMLElement;
       expect(within(pendingCard).getByText('1')).toBeInTheDocument();
+    });
+  });
+
+  describe('edit kid interactions', () => {
+    test('clicking Edit button opens the edit modal with correct kid data', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+      renderParentDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByText('Emma Smith')).toBeInTheDocument();
+      });
+
+      // Find Emma's card
+      const emmaCard = screen.getByText('Emma Smith').closest('.kid-card') as HTMLElement;
+
+      // Click the edit button
+      const editButton = within(emmaCard).getByRole('button', { name: /edit/i });
+      await user.click(editButton);
+
+      // Verify modal opened
+      await waitFor(() => {
+        expect(screen.getByTestId('parent-kid-edit-modal')).toBeInTheDocument();
+      });
+
+      // Verify correct props were passed
+      expect(mockEditModal).toHaveBeenLastCalledWith(expect.objectContaining({
+        isOpen: true,
+        kid: expect.objectContaining({
+          id: 'kid-1',
+          personalInfo: expect.objectContaining({
+            firstName: 'Emma'
+          })
+        })
+      }));
     });
   });
 });

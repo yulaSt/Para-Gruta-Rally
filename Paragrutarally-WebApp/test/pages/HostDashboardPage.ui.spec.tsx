@@ -101,7 +101,7 @@ const mockKidsData = [
   },
 ];
 
-function createMockFirestoreSnapshot(docs: Array<{ id: string; [key: string]: unknown }>) {
+function createMockFirestoreSnapshot(docs: Array<{ id: string;[key: string]: unknown }>) {
   return {
     docs: docs.map((data) => ({
       id: data.id,
@@ -110,9 +110,7 @@ function createMockFirestoreSnapshot(docs: Array<{ id: string; [key: string]: un
   };
 }
 
-// Track which collection is being queried
-let queryCount = 0;
-
+// Mock helper to detect collection path
 function setupDefaultMocks() {
   mockedUsePermissions.mockReturnValue({
     permissions: {
@@ -126,22 +124,34 @@ function setupDefaultMocks() {
     error: null,
   } as unknown as ReturnType<typeof usePermissions>);
 
-  // Reset query count for each test
-  queryCount = 0;
+  // Enhanced mocks to return data based on collection path
+  mockCollection.mockImplementation((_db: unknown, path: string) => ({
+    type: 'collection',
+    path
+  }));
 
-  // Return events for first query, kids for second query
-  mockGetDocs.mockImplementation(() => {
-    queryCount++;
-    if (queryCount === 1) {
+  mockQuery.mockImplementation((collectionRef: { path: string }) => ({
+    type: 'query',
+    collection: collectionRef
+  }));
+
+  mockGetDocs.mockImplementation((queryRef: { collection?: { path: string }, type?: string }) => {
+    // Check if it's a query or a direct collection ref (though code uses query)
+    const path = queryRef?.collection?.path || queryRef?.type === 'collection' && (queryRef as any).path;
+
+    if (path === 'events') {
       return Promise.resolve(createMockFirestoreSnapshot(mockEventsData));
     }
-    return Promise.resolve(createMockFirestoreSnapshot(mockKidsData));
+    if (path === 'kids') {
+      return Promise.resolve(createMockFirestoreSnapshot(mockKidsData));
+    }
+    // Default fallback (shouldn't be reached if logic is correct)
+    return Promise.resolve(createMockFirestoreSnapshot([]));
   });
 
   mockUpdateDoc.mockResolvedValue(undefined);
   mockDoc.mockReturnValue({ id: 'mock-doc-ref' });
-  mockCollection.mockReturnValue({ id: 'collection' });
-  mockQuery.mockReturnValue({ id: 'mock-query' });
+  // mockCollection/mockQuery are handled above
   mockWhere.mockReturnValue({ id: 'mock-where' });
   mockOrderBy.mockReturnValue({ id: 'mock-orderby' });
 }
@@ -349,7 +359,7 @@ describe('HostDashboardPage', () => {
 
     test('"Save" shows error on failure and keeps edit mode', async () => {
       const user = userEvent.setup({ pointerEventsCheck: 0 });
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
 
       // Make updateDoc reject
       mockUpdateDoc.mockRejectedValue(new Error('Permission denied'));
@@ -426,7 +436,7 @@ describe('HostDashboardPage', () => {
   describe('loading and error states', () => {
     test('shows loading state while data is being fetched', async () => {
       // Make getDocs never resolve during this test
-      mockGetDocs.mockImplementation(() => new Promise(() => {}));
+      mockGetDocs.mockImplementation(() => new Promise(() => { }));
 
       renderHostDashboard();
 
@@ -456,11 +466,14 @@ describe('HostDashboardPage', () => {
 
     test('shows empty state when no participants are registered', async () => {
       // Return events but no kids
-      queryCount = 0;
-      mockGetDocs.mockImplementation(() => {
-        queryCount++;
-        if (queryCount === 1) {
+      mockGetDocs.mockImplementation((queryRef: { collection?: { path: string }, type?: string }) => {
+        const path = queryRef?.collection?.path || queryRef?.type === 'collection' && (queryRef as any).path;
+
+        if (path === 'events') {
           return Promise.resolve(createMockFirestoreSnapshot(mockEventsData));
+        }
+        if (path === 'kids') {
+          return Promise.resolve(createMockFirestoreSnapshot([]));
         }
         return Promise.resolve(createMockFirestoreSnapshot([]));
       });
@@ -478,6 +491,7 @@ describe('HostDashboardPage', () => {
     test('displays correct stats for events and participants', async () => {
       renderHostDashboard();
 
+
       await waitFor(() => {
         expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
       });
@@ -493,6 +507,118 @@ describe('HostDashboardPage', () => {
       // Participants: 2
       const participantsCard = statsGrid.querySelector('.stat-card.kids') as HTMLElement;
       expect(within(participantsCard).getByText('2')).toBeInTheDocument();
+    });
+  });
+
+  describe('search and filter functionality', () => {
+    test('search input filters participants by name', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+      renderHostDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
+        expect(screen.getByText('Taylor Williams')).toBeInTheDocument();
+      });
+
+      // Find search input
+      const searchInput = screen.getByPlaceholderText(/Search participants by name or number/i);
+      await user.type(searchInput, 'Alex');
+
+      // Should show Alex and hide Taylor
+      await waitFor(() => {
+        expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
+        expect(screen.queryByText('Taylor Williams')).not.toBeInTheDocument();
+      });
+    });
+
+    test('filter by event filters participants correctly', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+      renderHostDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
+        expect(screen.getByText('Taylor Williams')).toBeInTheDocument();
+      });
+
+      // Find event filter dropdown
+      // Text "All Events" appears as option, but we want the select element.
+      // The label creates an accessible name "Filter by Event" (from t('common.filterByEvent', 'Filter by Event'))
+      // Using generic getByRole('combobox') might be risky if there are multiple.
+      // Looking at source: 
+      // <label className="filter-label"><Filter size={16} />{t('common.filterByEvent', 'Filter by Event')}</label>
+      // The select is NEXT to it, not nested inside label unless implicit association works. The markup shows:
+      // <div className="filter-container"><label...></label><select...></div>
+      // So no implicit association. We might need to target by display value or class, or modify component to add ID.
+      // But looking at existing tests, they find stuff by text.
+      // Let's rely on finding the container or just `screen.getByRole('combobox')` if it's the only one.
+      // The only other input is search (textbox). So combobox should be unique.
+      const filterSelect = screen.getByRole('combobox');
+
+      // Select "Summer Rally 2024" (Alex is in team-1, Summer Rally has team-1)
+      // Alex -> team-1
+      // Taylor -> team-2
+      // Summer Rally 2024 -> participatingTeams: ['team-1']
+      // So selecting 'Summer Rally 2024' should show Alex and hide Taylor.
+
+      await user.selectOptions(filterSelect, 'event-1'); // Select by value
+
+      // Should show Alex and hide Taylor
+      await waitFor(() => {
+        expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
+        expect(screen.queryByText('Taylor Williams')).not.toBeInTheDocument();
+      });
+    });
+
+    test('clear search button resets list', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+      renderHostDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/Search participants by name or number/i);
+      await user.type(searchInput, 'Alex');
+
+      await waitFor(() => {
+        expect(screen.queryByText('Taylor Williams')).not.toBeInTheDocument();
+      });
+
+      // Find clear button (only shows when search term exists)
+      const clearButton = screen.getByRole('button', { name: '✕' }); // Assuming standard X char from source
+      await user.click(clearButton);
+
+      // Should show Taylor again
+      await waitFor(() => {
+        expect(screen.getByText('Taylor Williams')).toBeInTheDocument();
+        expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
+      });
+
+      // Search input should be empty
+      expect(searchInput).toHaveValue('');
+    });
+
+    test('shows empty state when search yields no results', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+      renderHostDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByText('Alex Johnson')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/Search participants by name or number/i);
+      await user.type(searchInput, 'NonExistentPerson');
+
+      await waitFor(() => {
+        expect(screen.getByText('No Participants Found')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('No participants match your current filter')).toBeInTheDocument();
+      expect(screen.queryByText('Alex Johnson')).not.toBeInTheDocument();
     });
   });
 });
