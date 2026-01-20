@@ -67,8 +67,13 @@ const FormsManagementPage = () => {
 
     // Load forms data
     useEffect(() => {
+        // Avoid hitting admin-only services until permissions are known.
+        if (!permissions) return;
+        // Only admins can view/manage all forms + submissions.
+        if (userRole !== 'admin') return;
         loadFormsData();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [permissions, userRole]);
 
     const loadFormsData = async () => {
         setIsLoading(true);
@@ -189,7 +194,7 @@ const FormsManagementPage = () => {
 
     if (!permissions) {
         return (
-            <Dashboard requiredRole={userRole}>
+            <Dashboard requiredRole="admin">
                 <div className={`forms-management-page ${appliedTheme}-mode`}>
                     <div className="loading-container">
                         <div className="loading-spinner"></div>
@@ -201,7 +206,7 @@ const FormsManagementPage = () => {
     }
 
     return (
-        <Dashboard requiredRole={userRole}>
+        <Dashboard requiredRole="admin">
             <div className={`forms-management-page ${appliedTheme}-mode`}>
                 {/* Page Title */}
                 <h1 className="page-title">

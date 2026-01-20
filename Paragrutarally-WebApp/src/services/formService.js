@@ -461,6 +461,24 @@ export const updateForm = async (formId, updateData) => {
  */
 export const deleteForm = async (formId) => {
     try {
+        // Best-effort cleanup: remove submissions belonging to this form.
+        // This prevents dangling submissions from breaking admin views after deletion.
+        try {
+            const submissionsRef = collection(db, FORM_SUBMISSIONS_COLLECTION);
+            const q = query(submissionsRef, where('formId', '==', formId));
+            const submissionsSnap = await getDocs(q);
+
+            if (!submissionsSnap.empty) {
+                const batch = writeBatch(db);
+                submissionsSnap.forEach((submissionDoc) => {
+                    batch.delete(submissionDoc.ref);
+                });
+                await batch.commit();
+            }
+        } catch (cleanupError) {
+            console.warn('⚠️ Could not delete related submissions for form:', formId, cleanupError);
+        }
+
         const formRef = doc(db, FORMS_COLLECTION, formId);
         await deleteDoc(formRef);
 

@@ -30,8 +30,28 @@ afterEach(async () => {
   }
 });
 
+// JSDOM does not implement all browser APIs used by the app.
+if (typeof window !== 'undefined') {
+  window.alert = () => {};
+  window.confirm = () => true;
+
+  if (typeof HTMLAnchorElement !== 'undefined') {
+    // Prevent JSDOM "navigation to another Document" noise from download links.
+    HTMLAnchorElement.prototype.click = () => {};
+  }
+
+  if (typeof URL !== 'undefined') {
+    const url = URL as unknown as {
+      createObjectURL?: (blob: Blob) => string;
+      revokeObjectURL?: (url: string) => void;
+    };
+
+    url.createObjectURL ??= () => 'blob:vitest';
+    url.revokeObjectURL ??= () => {};
+  }
+}
+
 // Extend `expect` with `jest-dom` matchers for DOM-enabled tests only.
 if (typeof window !== 'undefined') {
   await import('@testing-library/jest-dom/vitest');
 }
-

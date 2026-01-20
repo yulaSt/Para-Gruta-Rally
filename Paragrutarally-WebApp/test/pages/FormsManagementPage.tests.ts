@@ -275,7 +275,9 @@ export function runFormsManagementPageTests(setupFn: SetupFunction, options: Run
         expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/delete this form/i));
 
         if (options.afterDelete) {
-            await options.afterDelete('form-1');
+            await waitFor(async () => {
+                await options.afterDelete?.('form-1');
+            });
         }
 
         confirmSpy.mockRestore();

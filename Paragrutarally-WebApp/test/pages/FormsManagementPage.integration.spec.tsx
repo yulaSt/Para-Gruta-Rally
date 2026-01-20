@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { initializeTestEnvironment, RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 
 // Use REAL config/hooks
@@ -158,6 +158,10 @@ describeWithFirestoreEmulator('FormsManagementPage (Integration)', () => {
 
     // Additional Integration Tests (Permissions)
     test('denies access for non-admin role', async () => {
+        // Redirect is expected; suppress any permission-denied logs if they occur during auth init.
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
         // Authenticate as non-admin
         const userCredential = await import('firebase/auth').then(m => m.signInAnonymously(auth));
         const uid = userCredential.user.uid;
@@ -170,23 +174,28 @@ describeWithFirestoreEmulator('FormsManagementPage (Integration)', () => {
             });
         });
 
-        render(
-            <AuthProvider>
-                <ThemeProvider>
-                    <LanguageContext.Provider value={mockLanguageContext}>
-                        <PermissionProvider>
-                            <MemoryRouter>
-                                <FormsManagementPage />
-                            </MemoryRouter>
-                        </PermissionProvider>
-                    </LanguageContext.Provider>
-                </ThemeProvider>
-            </AuthProvider>
-        );
-
-        expect(
-            await screen.findByText(/Unable to load forms data/i)
-        ).toBeInTheDocument();
+        try {
+            render(
+                <AuthProvider>
+                    <ThemeProvider>
+                        <LanguageContext.Provider value={mockLanguageContext}>
+                            <PermissionProvider>
+                                <MemoryRouter initialEntries={['/admin/forms']}>
+                                    <Routes>
+                                        <Route path="/admin/forms" element={<FormsManagementPage />} />
+                                        <Route path="/login" element={<div>Login Page</div>} />
+                                    </Routes>
+                                </MemoryRouter>
+                            </PermissionProvider>
+                        </LanguageContext.Provider>
+                    </ThemeProvider>
+                </AuthProvider>
+            );
+            expect(await screen.findByText('Login Page')).toBeInTheDocument();
+        } finally {
+            consoleError.mockRestore();
+            consoleWarn.mockRestore();
+        }
     });
 
 });
