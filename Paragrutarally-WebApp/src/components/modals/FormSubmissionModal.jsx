@@ -363,10 +363,10 @@ const FormSubmissionModal = ({
     const requiredExtraAttendees = Math.max(0, formData.attendeesCount - 1 - formData.kidIds.length);
 
     return (
-        <div className="form-submission-modal-overlay">
+        <div className="form-submission-modal-overlay" role="dialog" aria-modal="true" data-testid="form-submission-modal">
             <div className="form-submission-modal-content">
                 <div className="form-submission-modal-header">
-                    <h3>
+                    <h3 data-testid="modal-form-title">
                         <FileText size={24} />
                         {form.title}
                     </h3>

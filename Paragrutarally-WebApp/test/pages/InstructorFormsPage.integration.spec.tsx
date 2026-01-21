@@ -67,8 +67,18 @@ describeWithFirestoreEmulator('InstructorFormsPage (Integration)', () => {
     const setupIntegration = async (data?: TestData) => {
         if (!data) return;
 
+        // Authenticate as Instructor
+        const userCredential = await import('firebase/auth').then(m => m.signInAnonymously(auth));
+        const uid = userCredential.user.uid;
+
         await testEnv.withSecurityRulesDisabled(async (context) => {
             const db = context.firestore();
+
+            await db.collection('users').doc(uid).set({
+                role: 'instructor',
+                email: 'instructor@test.com',
+                displayName: 'Instructor User'
+            });
 
             // Seed Forms
             for (const form of data.forms) {
@@ -77,20 +87,11 @@ describeWithFirestoreEmulator('InstructorFormsPage (Integration)', () => {
 
             // Seed Submissions
             for (const submission of data.submissions) {
-                await db.collection('form_submissions').doc(submission.id).set(submission);
+                await db.collection('form_submissions').doc(submission.id).set({
+                    ...submission,
+                    submitterId: submission.submitterId === '__current_user__' ? uid : submission.submitterId,
+                });
             }
-        });
-
-        // Authenticate as Instructor
-        const userCredential = await import('firebase/auth').then(m => m.signInAnonymously(auth));
-        const uid = userCredential.user.uid;
-
-        await testEnv.withSecurityRulesDisabled(async (context) => {
-            await context.firestore().collection('users').doc(uid).set({
-                role: 'instructor',
-                email: 'instructor@test.com',
-                displayName: 'Instructor User'
-            });
         });
 
         render(

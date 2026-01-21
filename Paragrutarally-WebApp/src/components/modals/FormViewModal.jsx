@@ -108,10 +108,10 @@ const FormViewModal = ({
     };
 
     return (
-        <div className="form-creation-modal-overlay">
+        <div className="form-creation-modal-overlay" role="dialog" aria-modal="true" data-testid="form-view-modal">
             <div className="form-creation-modal-content">
                 <div className="form-creation-modal-header">
-                    <h3>
+                    <h3 data-testid="view-modal-form-title">
                         <FileText size={24} />
                         {t('forms.viewForm', 'View Form')} - {form.title}
                     </h3>

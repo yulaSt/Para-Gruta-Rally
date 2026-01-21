@@ -17,10 +17,26 @@ process.env.VITE_FIREBASE_MESSAGING_SENDER_ID ??= 'test-sender';
 process.env.VITE_FIREBASE_APP_ID ??= 'test-app-id';
 
 // Prefer explicitly enabling emulators during integration tests.
-process.env.VITE_USE_FIREBASE_EMULATORS ??= readViteEnv('VITE_USE_FIREBASE_EMULATORS') ?? 'true';
+// If `.env` enables emulators but the test run didn't start them (no hub), force-disable to avoid network failures.
+{
+  const requested = readViteEnv('VITE_USE_FIREBASE_EMULATORS');
+  const hasEmulatorHub = Boolean(process.env.FIREBASE_EMULATOR_HUB);
+
+  if (requested === 'true' && !hasEmulatorHub) {
+    process.env.VITE_USE_FIREBASE_EMULATORS = 'false';
+  } else {
+    process.env.VITE_USE_FIREBASE_EMULATORS = requested ?? 'false';
+  }
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
+
+  if (process.env.VITEST_SHOW_LOGS !== 'true') {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  }
 });
 
 afterEach(async () => {

@@ -16,11 +16,11 @@ import {
 import './FormCreationModal.css'; // Reuse the same styles
 
 const FormEditModal = ({
-                           isOpen,
-                           form,
-                           onClose,
-                           onSuccess
-                       }) => {
+    isOpen,
+    form,
+    onClose,
+    onSuccess
+}) => {
     const { t, isRTL } = useLanguage();
     const { user } = usePermissions();
 
@@ -211,9 +211,14 @@ const FormEditModal = ({
 
     return (
         <div className="form-creation-modal-overlay">
-            <div className="form-creation-modal-content">
+            <div
+                className="form-creation-modal-content"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="form-edit-modal-title"
+            >
                 <div className="form-creation-modal-header">
-                    <h3>
+                    <h3 id="form-edit-modal-title">
                         <FileText size={24} />
                         {t('forms.editForm', 'Edit Form')}
                     </h3>

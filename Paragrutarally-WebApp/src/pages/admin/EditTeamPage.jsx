@@ -438,11 +438,12 @@ const EditTeamPage = () => {
                             <div className="form-grid">
                                 <div className="form-group">
                                     <div className="field-wrapper">
-                                        <label className="form-label">
+                                        <label className="form-label" htmlFor="name">
                                             <Target className="label-icon" size={16} />
                                             {t('teams.teamName', 'Team Name')} *
                                         </label>
                                         <input
+                                            id="name"
                                             type="text"
                                             value={formData.name}
                                             onChange={(e) => handleInputChange('name', e.target.value)}
@@ -455,11 +456,12 @@ const EditTeamPage = () => {
 
                                 <div className="form-group">
                                     <div className="field-wrapper">
-                                        <label className="form-label">
+                                        <label className="form-label" htmlFor="maxCapacity">
                                             <Users className="label-icon" size={16} />
                                             {t('teams.maxRacers', 'Max Racers')}
                                         </label>
                                         <input
+                                            id="maxCapacity"
                                             type="number"
                                             min="1"
                                             max="50"
@@ -473,11 +475,12 @@ const EditTeamPage = () => {
 
                                 <div className="form-group full-width">
                                     <div className="field-wrapper">
-                                        <label className="form-label">
+                                        <label className="form-label" htmlFor="description">
                                             <FileText className="label-icon" size={16} />
                                             {t('teams.teamDescription', 'Team Description')}
                                         </label>
                                         <textarea
+                                            id="description"
                                             value={formData.description}
                                             onChange={(e) => handleInputChange('description', e.target.value)}
                                             placeholder={t('teams.teamDescriptionPlaceholder', 'What makes this team special? Their racing spirit, teamwork, or special skills...')}
@@ -489,11 +492,12 @@ const EditTeamPage = () => {
 
                                 <div className="form-group">
                                     <div className="field-wrapper">
-                                        <label className="form-label">
+                                        <label className="form-label" htmlFor="active">
                                             <Check className="label-icon" size={16} />
                                             {t('teams.teamStatus', 'Team Status')}
                                         </label>
                                         <select
+                                            id="active"
                                             value={formData.active ? 'active' : 'inactive'}
                                             onChange={(e) => handleInputChange('active', e.target.value === 'active')}
                                             className="form-select racing-select"

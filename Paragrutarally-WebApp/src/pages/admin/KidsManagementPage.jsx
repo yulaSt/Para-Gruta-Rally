@@ -84,16 +84,20 @@ const KidsManagementPage = () => {
     const getKidDisplayName = (kid) => {
         switch (userRole) {
             case 'admin':
-            { const firstName = kid.personalInfo?.firstName || '';
-                const lastName = kid.personalInfo?.lastName || '';
-                const fullName = `${firstName} ${lastName}`.trim();
-                return fullName || `${t('kids.participantNumber', 'Participant #')}${kid.participantNumber}`; }
+                {
+                    const firstName = kid.personalInfo?.firstName || '';
+                    const lastName = kid.personalInfo?.lastName || '';
+                    const fullName = `${firstName} ${lastName}`.trim();
+                    return fullName || `${t('kids.participantNumber', 'Participant #')}${kid.participantNumber}`;
+                }
             case 'instructor':
             case 'parent':
-            { const instFirstName = kid.personalInfo?.firstName || '';
-                const instLastName = kid.personalInfo?.lastName || '';
-                const instFullName = `${instFirstName} ${instLastName}`.trim();
-                return instFullName || `${t('kids.participantNumber', 'Participant #')}${kid.participantNumber}`; }
+                {
+                    const instFirstName = kid.personalInfo?.firstName || '';
+                    const instLastName = kid.personalInfo?.lastName || '';
+                    const instFullName = `${instFirstName} ${instLastName}`.trim();
+                    return instFullName || `${t('kids.participantNumber', 'Participant #')}${kid.participantNumber}`;
+                }
             default:
                 return 'Restricted';
         }
@@ -148,6 +152,14 @@ const KidsManagementPage = () => {
                 .filter(kid => canUserAccessKid(userRole, kid, userData, user))
                 .map(kid => {
                     const photoInfo = getKidPhotoInfo(kid);
+
+                    // Lookup team name from local teamsData to avoid stale state
+                    let teamName = t('kids.noTeam', 'No Team');
+                    if (kid.teamId) {
+                        const team = teamsData.find(t => t.id === kid.teamId);
+                        teamName = team ? team.name : `Team ${kid.teamId.slice(0, 8)}...`;
+                    }
+
                     return {
                         id: kid.id,
                         name: getKidDisplayName(kid),
@@ -157,7 +169,7 @@ const KidsManagementPage = () => {
                                 ? 'You'
                                 : 'Restricted',
                         age: kid.personalInfo?.dateOfBirth ? calculateAge(kid.personalInfo.dateOfBirth) : 'N/A',
-                        team: getTeamNameById(kid.teamId),
+                        team: teamName,
                         teamId: kid.teamId,
                         status: kid.signedFormStatus?.toLowerCase() || 'pending',
                         participantNumber: kid.participantNumber,
@@ -612,15 +624,15 @@ const KidsManagementPage = () => {
                             <FileSpreadsheet className="results-icon" size={18} />
                             {t('kids.showing', 'Showing')} {filteredKids.length} {t('kids.of', 'of')} {kids.length} {t('kids.kids', 'kids')}
                             {showingKidsWithoutTeams && <span className="priority-filter"> • 🚨 {t('kids.priorityFilter', 'PRIORITY: Kids without teams')}</span>}
-                            {teamFilter !== 'all' && !showingKidsWithoutTeams && <span className="filter-applied"> • {t('kids.status', 'Status')}: {teamFilter==='with-team' ? t('kids.withTeam', 'With Team'): teamFilter=== 'no-team' ?t('kids.noTeam', 'No Team'): teamFilter}</span>}
+                            {teamFilter !== 'all' && !showingKidsWithoutTeams && <span className="filter-applied"> • {t('kids.status', 'Status')}: {teamFilter === 'with-team' ? t('kids.withTeam', 'With Team') : teamFilter === 'no-team' ? t('kids.noTeam', 'No Team') : teamFilter}</span>}
                             {statusFilter !== 'all' && (
                                 <span className="filter-applied">
                                     • {t('kids.status', 'Status')}: {
-                                    statusFilter === 'active'
-                                        ? t('kids.active', 'Active')
-                                        : t(`status.${statusFilter}`, statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1))
-                                }
-                         </span>
+                                        statusFilter === 'active'
+                                            ? t('kids.active', 'Active')
+                                            : t(`status.${statusFilter}`, statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1))
+                                    }
+                                </span>
                             )}
                             {searchTerm && <span className="search-applied"> • {t('general.search', 'Search')}: "{searchTerm}"</span>}
                         </div>
@@ -637,160 +649,160 @@ const KidsManagementPage = () => {
                     <div className="table-container">
                         <table className="data-table">
                             <thead>
-                            <tr>
-                                <th><Baby size={16} style={{ marginRight: '8px' }} />{t('kids.kidInfo', 'Kid Info')}</th>
-                                <th><Camera size={16} style={{ marginRight: '8px' }} />{t('kids.photo', 'Photo')}</th>
-                                <th>🎂 {t('kids.age', 'Age')}</th>
-                                <th><Car size={16} style={{ marginRight: '8px' }} />{t('kids.team', 'Team')}</th>
-                                <th><BarChart3 size={16} style={{ marginRight: '8px' }} />{t('kids.status', 'Status')}</th>
-                                <th>⚡ {t('kids.actions', 'Actions')}</th>
-                            </tr>
+                                <tr>
+                                    <th><Baby size={16} style={{ marginRight: '8px' }} />{t('kids.kidInfo', 'Kid Info')}</th>
+                                    <th><Camera size={16} style={{ marginRight: '8px' }} />{t('kids.photo', 'Photo')}</th>
+                                    <th>🎂 {t('kids.age', 'Age')}</th>
+                                    <th><Car size={16} style={{ marginRight: '8px' }} />{t('kids.team', 'Team')}</th>
+                                    <th><BarChart3 size={16} style={{ marginRight: '8px' }} />{t('kids.status', 'Status')}</th>
+                                    <th>⚡ {t('kids.actions', 'Actions')}</th>
+                                </tr>
                             </thead>
                             <tbody>
-                            {isLoading ? (
-                                <tr>
-                                    <td colSpan="6" className="loading-cell">
-                                        <div className="loading-content">
-                                            <Clock className="loading-spinner" size={30} />
-                                            {t('kids.loadingKids', 'Loading kids...')}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : filteredKids.length === 0 ? (
-                                <tr>
-                                    <td colSpan="6">
-                                        <div className="empty-state">
-                                            <Baby className="empty-icon" size={60} />
-                                            <h3>{t('kids.noKidsFound', 'No kids found')}</h3>
-                                            <p>
-                                                {userRole === 'parent'
-                                                    ? t('kids.noKidsRegistered', 'No kids registered under your account')
-                                                    : t('kids.adjustFilters', 'Try adjusting your search or filters')
-                                                }
-                                            </p>
-                                            {userRole === 'admin' && (
-                                                <button className="btn-primary" style={{ marginTop: '15px' }} onClick={handleAddKid}>
-                                                    <Plus className="btn-icon" size={18} />
-                                                    {t('kids.addFirstKid', 'Add First Kid')}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredKids.map(kid => (
-                                    <tr
-                                        key={kid.id}
-                                        className={`${kid.team === t('kids.noTeam', 'No Team') ? 'priority-row' : ''} clickable-row`}
-                                        onClick={(e) => handleRowClick(kid, e)}
-                                        style={{ cursor: 'pointer' }}
-                                        title={t('kids.clickToView', 'Click to view details')}
-                                    >
-                                        <td>
-                                            <div className="kid-info">
-                                                <div className="kid-name">
-                                                    {kid.team === t('kids.noTeam', 'No Team') && <AlertTriangle className="priority-indicator" size={16} />}
-                                                    {kid.name}
-                                                </div>
-                                                <div className="parent-name">👨‍👩‍👧‍👦 {kid.parentName}</div>
+                                {isLoading ? (
+                                    <tr>
+                                        <td colSpan="6" className="loading-cell">
+                                            <div className="loading-content">
+                                                <Clock className="loading-spinner" size={30} />
+                                                {t('kids.loadingKids', 'Loading kids...')}
                                             </div>
                                         </td>
-                                        <td>
-                                            <div className="kid-photo-container">
-                                                {kid.hasPhoto ? (
-                                                    <img
-                                                        src={kid.photoUrl}
-                                                        alt={kid.name}
-                                                        className="table-kid-photo"
-                                                    />
-                                                ) : (
-                                                    <div className="table-kid-photo-placeholder">
-                                                        {kid.initials}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td>{kid.age}</td>
-                                        <td>
-                                            <span className={`team-badge ${kid.team === t('kids.noTeam', 'No Team') ? 'no-team' : 'with-team'}`}>
-                                                {kid.team === t('kids.noTeam', 'No Team') ? (
-                                                    <>
-                                                        <AlertTriangle size={14} style={{ marginRight: '4px' }} />
-                                                        {t('kids.noTeam', 'No Team')}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Car size={14} style={{ marginRight: '4px' }} />
-                                                        {getTeamNameById(kid.teamId)}
-                                                    </>
-                                                )}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className={`status-badge status-${kid.status}`}>
-                                                {kid.status === 'active' && <Check size={14} style={{ marginRight: '4px' }} />}
-                                                {kid.status === 'completed' && <Check size={14} style={{ marginRight: '4px' }} />}
-                                                {kid.status === 'cancelled' && <XCircle size={14} style={{ marginRight: '4px' }} />}
-                                                {kid.status === 'pending' && <Clock size={14} style={{ marginRight: '4px' }} />}
-                                                {t(`status.${kid.status}`, kid.status.charAt(0).toUpperCase() + kid.status.slice(1))}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div className="action-buttons-enhanced">
-                                                <button
-                                                    className="btn-action view"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleViewKid(kid);
-                                                    }}
-                                                    title={t('kids.viewDetails', 'View Details')}
-                                                >
-                                                    <Eye size={16} />
-                                                </button>
-
-                                                {(userRole === 'admin' || userRole === 'instructor') && (
-                                                    <button
-                                                        className={`btn-action ${kid.team === t('kids.noTeam', 'No Team') ? 'assign-team priority' : 'change-team'}`}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleChangeTeam(kid);
-                                                        }}
-                                                        title={kid.team === t('kids.noTeam', 'No Team') ? t('kids.assignTeam', 'Assign Team') : t('kids.changeTeam', 'Change Team')}
-                                                    >
-                                                        {kid.team === t('kids.noTeam', 'No Team') ? <Plus size={16} /> : <Car size={16} />}
-                                                    </button>
-                                                )}
-
-                                                {(userRole === 'admin' || userRole === 'instructor') && (
-                                                    <button
-                                                        className="btn-action edit"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleEditKid(kid);
-                                                        }}
-                                                        title={t('kids.editKid', 'Edit Kid')}
-                                                    >
-                                                        <Edit size={16} />
-                                                    </button>
-                                                )}
-
+                                    </tr>
+                                ) : filteredKids.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="6">
+                                            <div className="empty-state">
+                                                <Baby className="empty-icon" size={60} />
+                                                <h3>{t('kids.noKidsFound', 'No kids found')}</h3>
+                                                <p>
+                                                    {userRole === 'parent'
+                                                        ? t('kids.noKidsRegistered', 'No kids registered under your account')
+                                                        : t('kids.adjustFilters', 'Try adjusting your search or filters')
+                                                    }
+                                                </p>
                                                 {userRole === 'admin' && (
-                                                    <button
-                                                        className="btn-action delete"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteKid(kid);
-                                                        }}
-                                                        title={t('kids.deleteKid', 'Delete Kid')}
-                                                    >
-                                                        <Trash2 size={16} />
+                                                    <button className="btn-primary" style={{ marginTop: '15px' }} onClick={handleAddKid}>
+                                                        <Plus className="btn-icon" size={18} />
+                                                        {t('kids.addFirstKid', 'Add First Kid')}
                                                     </button>
                                                 )}
                                             </div>
                                         </td>
                                     </tr>
-                                ))
-                            )}
+                                ) : (
+                                    filteredKids.map(kid => (
+                                        <tr
+                                            key={kid.id}
+                                            className={`${kid.team === t('kids.noTeam', 'No Team') ? 'priority-row' : ''} clickable-row`}
+                                            onClick={(e) => handleRowClick(kid, e)}
+                                            style={{ cursor: 'pointer' }}
+                                            title={t('kids.clickToView', 'Click to view details')}
+                                        >
+                                            <td>
+                                                <div className="kid-info">
+                                                    <div className="kid-name">
+                                                        {kid.team === t('kids.noTeam', 'No Team') && <AlertTriangle className="priority-indicator" size={16} />}
+                                                        {kid.name}
+                                                    </div>
+                                                    <div className="parent-name">👨‍👩‍👧‍👦 {kid.parentName}</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="kid-photo-container">
+                                                    {kid.hasPhoto ? (
+                                                        <img
+                                                            src={kid.photoUrl}
+                                                            alt={kid.name}
+                                                            className="table-kid-photo"
+                                                        />
+                                                    ) : (
+                                                        <div className="table-kid-photo-placeholder">
+                                                            {kid.initials}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td>{kid.age}</td>
+                                            <td>
+                                                <span className={`team-badge ${kid.team === t('kids.noTeam', 'No Team') ? 'no-team' : 'with-team'}`}>
+                                                    {kid.team === t('kids.noTeam', 'No Team') ? (
+                                                        <>
+                                                            <AlertTriangle size={14} style={{ marginRight: '4px' }} />
+                                                            {t('kids.noTeam', 'No Team')}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Car size={14} style={{ marginRight: '4px' }} />
+                                                            {getTeamNameById(kid.teamId)}
+                                                        </>
+                                                    )}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge status-${kid.status}`}>
+                                                    {kid.status === 'active' && <Check size={14} style={{ marginRight: '4px' }} />}
+                                                    {kid.status === 'completed' && <Check size={14} style={{ marginRight: '4px' }} />}
+                                                    {kid.status === 'cancelled' && <XCircle size={14} style={{ marginRight: '4px' }} />}
+                                                    {kid.status === 'pending' && <Clock size={14} style={{ marginRight: '4px' }} />}
+                                                    {t(`status.${kid.status}`, kid.status.charAt(0).toUpperCase() + kid.status.slice(1))}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="action-buttons-enhanced">
+                                                    <button
+                                                        className="btn-action view"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleViewKid(kid);
+                                                        }}
+                                                        title={t('kids.viewDetails', 'View Details')}
+                                                    >
+                                                        <Eye size={16} />
+                                                    </button>
+
+                                                    {(userRole === 'admin' || userRole === 'instructor') && (
+                                                        <button
+                                                            className={`btn-action ${kid.team === t('kids.noTeam', 'No Team') ? 'assign-team priority' : 'change-team'}`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleChangeTeam(kid);
+                                                            }}
+                                                            title={kid.team === t('kids.noTeam', 'No Team') ? t('kids.assignTeam', 'Assign Team') : t('kids.changeTeam', 'Change Team')}
+                                                        >
+                                                            {kid.team === t('kids.noTeam', 'No Team') ? <Plus size={16} /> : <Car size={16} />}
+                                                        </button>
+                                                    )}
+
+                                                    {(userRole === 'admin' || userRole === 'instructor') && (
+                                                        <button
+                                                            className="btn-action edit"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleEditKid(kid);
+                                                            }}
+                                                            title={t('kids.editKid', 'Edit Kid')}
+                                                        >
+                                                            <Edit size={16} />
+                                                        </button>
+                                                    )}
+
+                                                    {userRole === 'admin' && (
+                                                        <button
+                                                            className="btn-action delete"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteKid(kid);
+                                                            }}
+                                                            title={t('kids.deleteKid', 'Delete Kid')}
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>

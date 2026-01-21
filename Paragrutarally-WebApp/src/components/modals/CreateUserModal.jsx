@@ -25,6 +25,8 @@ import {
     IconKey as Key
 } from '@tabler/icons-react';
 
+
+
 const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
     const { t, isRTL } = useLanguage();
 
@@ -91,6 +93,8 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
             const timestamp = Date.now();
             const secondaryApp = initializeApp(firebaseConfig, `CreateUser_${timestamp}`);
             const secondaryAuth = getAuth(secondaryApp);
+
+
 
             try {
                 // Create user with secondary auth instance
@@ -191,7 +195,7 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
 
     return (
         <div className="form-creation-modal-overlay" dir={isRTL ? 'rtl' : 'ltr'}>
-            <div 
+            <div
                 className="form-creation-modal-content"
                 role="dialog"
                 aria-modal="true"

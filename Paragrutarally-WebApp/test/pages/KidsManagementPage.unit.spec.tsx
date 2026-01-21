@@ -153,6 +153,7 @@ describe('KidsManagementPage (Unit)', () => {
     test('handles data loading error', async () => {
         mockGetAllKids.mockRejectedValue(new Error('Fetch failed'));
         mockGetAllTeams.mockResolvedValue([]);
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         render(
             <MemoryRouter>
@@ -163,5 +164,7 @@ describe('KidsManagementPage (Unit)', () => {
         await waitFor(() => {
             expect(screen.getByText(/failed to load data/i)).toBeInTheDocument();
         });
+
+        consoleError.mockRestore();
     });
 });

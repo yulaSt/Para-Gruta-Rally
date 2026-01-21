@@ -367,9 +367,14 @@ const ExportTeamsModal = ({ isOpen, onClose }) => {
 
     return (
         <div className="form-creation-modal-overlay" dir={isRTL ? 'rtl' : 'ltr'}>
-            <div className="form-creation-modal-content">
+            <div
+                className="form-creation-modal-content"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="export-teams-modal-title"
+            >
                 <div className="form-creation-modal-header">
-                    <h3>
+                    <h3 id="export-teams-modal-title">
                         <Team size={24} />
                         {t('teams.exportTeams', 'Export Teams')}
                     </h3>

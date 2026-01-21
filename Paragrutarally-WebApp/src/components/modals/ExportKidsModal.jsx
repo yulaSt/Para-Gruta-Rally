@@ -358,9 +358,14 @@ const ExportKidsModal = ({ isOpen, onClose }) => {
 
     return (
         <div className="form-creation-modal-overlay" dir={isRTL ? 'rtl' : 'ltr'}>
-            <div className="form-creation-modal-content">
+            <div
+                className="form-creation-modal-content"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="export-kids-modal-title"
+            >
                 <div className="form-creation-modal-header">
-                    <h3>
+                    <h3 id="export-kids-modal-title">
                         <Baby size={24} />
                         {t('kids.exportKids', 'Export Kids')}
                     </h3>

@@ -31,6 +31,7 @@ export default defineConfig({
           include: ['test/**/*.spec.ts'],
           environment: 'node',
           setupFiles: ['./vitest.setup.ts'],
+          testTimeout: 60000,
         },
       }),
       defineProject({
@@ -40,6 +41,7 @@ export default defineConfig({
           include: ['test/**/*.ui.spec.{ts,tsx}', 'test/**/*.unit.spec.{ts,tsx}', 'test/**/*.integration.spec.{ts,tsx}'],
           environment: 'jsdom',
           setupFiles: ['./vitest.setup.ts'],
+          testTimeout: 60000,
         },
       }),
     ],

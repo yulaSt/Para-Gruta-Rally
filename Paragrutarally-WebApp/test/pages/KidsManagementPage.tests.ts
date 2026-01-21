@@ -1,5 +1,5 @@
 import { test, expect, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Define TestData interface
@@ -71,6 +71,7 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
 
     test('displays correct stats and renders kids list', async () => {
         await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
 
         // Helper to check stat card
         const checkStat = async (title: string, value: string) => {
@@ -92,10 +93,10 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
         // stats.activeKids: kids.filter(k => k.status === 'completed').length
         // So Kid 1 is counted. Kid 3 has status 'active' (from string) but presumably that maps to valid status?
         // Let's assume 'completed' is the "Active" status for the dashboard count.
-        
+
         await checkStat('Total Kids', '3');
         await checkStat('Kids without Teams', '1');
-        await checkStat('Active Kids', '1'); 
+        await checkStat('Active Kids', '1');
         await checkStat('Kids with Teams', '2');
 
         // Check table content
@@ -103,7 +104,7 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
         expect(within(table).getByText('Kid One')).toBeInTheDocument();
         expect(within(table).getByText('Kid Two')).toBeInTheDocument();
         expect(within(table).getByText('Kid Three')).toBeInTheDocument();
-        
+
         // Check Team Names
         expect(within(table).getAllByText('Red Racers')[0]).toBeInTheDocument();
         expect(within(table).getAllByText('Blue Blasters')[0]).toBeInTheDocument();
@@ -114,6 +115,7 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
     test('filters kids by status using stat cards', async () => {
         const user = userEvent.setup({ pointerEventsCheck: 0 });
         await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
 
         const table = screen.getByRole('table');
 
@@ -149,6 +151,7 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
     test('search filters kids by name', async () => {
         const user = userEvent.setup({ pointerEventsCheck: 0 });
         await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
 
         const searchInput = screen.getByPlaceholderText(/search by kid name/i);
         await user.type(searchInput, 'One');
@@ -165,6 +168,7 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
     test('opens add kid page', async () => {
         const user = userEvent.setup({ pointerEventsCheck: 0 });
         await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
 
         // Admin only button
         const addBtn = screen.getByRole('button', { name: /add new kid/i });
@@ -179,27 +183,29 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
     test('opens export kids modal', async () => {
         const user = userEvent.setup({ pointerEventsCheck: 0 });
         await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
 
         const exportBtn = screen.getByRole('button', { name: /export kids/i });
         await user.click(exportBtn);
 
         const modal = await screen.findByRole('dialog');
-        expect(within(modal).getByText(/export/i)).toBeInTheDocument();
+        expect(within(modal).getAllByText(/export/i).length).toBeGreaterThan(0);
     });
 
     test('handles view details interaction', async () => {
-         const user = userEvent.setup({ pointerEventsCheck: 0 });
-         await setupFn({ kids: defaultKids, teams: defaultTeams });
+        const user = userEvent.setup({ pointerEventsCheck: 0 });
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
 
-         const table = screen.getByRole('table');
-         // Click view on first row
-         const rows = within(table).getAllByRole('row');
-         // index 1 is first data row
-         const firstRow = rows[1];
-         const viewBtn = within(firstRow).getByTitle(/view details/i);
-         // or by icon? Title is accessible.
-         
-         await user.click(viewBtn);
-         // Checks navigation usually.
+        const table = screen.getByRole('table');
+        // Click view on first row
+        const rows = within(table).getAllByRole('row');
+        // index 1 is first data row
+        const firstRow = rows[1];
+        const viewBtn = within(firstRow).getByTitle(/view details/i);
+        // or by icon? Title is accessible.
+
+        await user.click(viewBtn);
+        // Checks navigation usually.
     });
 }

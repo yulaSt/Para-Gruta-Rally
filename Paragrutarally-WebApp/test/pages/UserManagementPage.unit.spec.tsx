@@ -142,6 +142,7 @@ describe('UserManagementPage (Unit)', () => {
     test('handles fetch error gracefully', async () => {
         mockGetDocs.mockRejectedValue(new Error('Fetch failed'));
         const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => { });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         render(
             <MemoryRouter>
@@ -157,5 +158,6 @@ describe('UserManagementPage (Unit)', () => {
         expect(alertMock).toHaveBeenCalledWith('Failed to load users. Please refresh the page.');
 
         alertMock.mockRestore();
+        consoleError.mockRestore();
     });
 });

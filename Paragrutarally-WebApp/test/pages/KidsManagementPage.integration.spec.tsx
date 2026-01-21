@@ -11,6 +11,7 @@ import KidsManagementPage from '@/pages/admin/KidsManagementPage';
 import { AuthProvider } from '@/contexts/AuthContext';
 import LanguageContext from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { PermissionProvider } from '@/hooks/usePermissions';
 import { runKidsManagementTests, TestData } from './KidsManagementPage.tests';
 
 // Mock LanguageContext
@@ -88,7 +89,11 @@ describeWithFirestoreEmulator('KidsManagementPage (Integration)', () => {
 
             // 3. Seed Teams
             for (const team of data.teams) {
-                await db.collection('teams').doc(team.id).set(team);
+                await db.collection('teams').doc(team.id).set({
+                    ...team,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                });
             }
 
             // 4. Seed Kids
@@ -109,9 +114,11 @@ describeWithFirestoreEmulator('KidsManagementPage (Integration)', () => {
             <AuthProvider>
                 <ThemeProvider>
                     <LanguageContext.Provider value={mockLanguageContext}>
-                        <MemoryRouter>
-                            <KidsManagementPage />
-                        </MemoryRouter>
+                        <PermissionProvider>
+                            <MemoryRouter>
+                                <KidsManagementPage />
+                            </MemoryRouter>
+                        </PermissionProvider>
                     </LanguageContext.Provider>
                 </ThemeProvider>
             </AuthProvider>

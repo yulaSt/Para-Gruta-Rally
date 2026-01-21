@@ -13,20 +13,20 @@ Follow the patterns defined in `TESTING_BEST_PRACTICES.md`:
 These areas handle critical data or user access and currently lack comprehensive test suites in `test/pages`.
 
 ### Admin Management Pages
-- [ ] **UserManagementPage** (`src/pages/admin/UserManagementPage.jsx`)
+- [x] **UserManagementPage** (`src/pages/admin/UserManagementPage.jsx`)
     - Unit: Test listing users, filtering, and role badges.
     - Integration: Test `createUser` and `updateUser` flows via emulators.
     - Modals: Cover `CreateUserModal` and `UpdateUserModal` interactions.
     
-- [ ] **TeamsManagementPage** (`src/pages/admin/TeamsManagementPage.jsx`)
+- [x] **TeamsManagementPage** (`src/pages/admin/TeamsManagementPage.jsx`)
     - Unit: Test team tables, industry grouping, and empty states.
     - Integration: Test `AddTeamPage` and `EditTeamPage` flows.
     
-- [ ] **KidsManagementPage** (`src/pages/admin/KidsManagementPage.jsx`)
+- [x] **KidsManagementPage** (`src/pages/admin/KidsManagementPage.jsx`)
     - Unit: Test searching, pagination (if any), and `AddKidPage` navigation.
 
 ### Critical Modals
-- [ ] **CreateUserModal / UpdateUserModal**
+- [x] **CreateUserModal / UpdateUserModal**
     - Verify form validation (required fields, email format).
     - Detailed error handling for duplicate emails.
 - [ ] **ParentKidEditModal**

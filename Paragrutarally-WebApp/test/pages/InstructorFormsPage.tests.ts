@@ -13,7 +13,9 @@ export const defaultForms = [
         title: 'Instructor Training Registration',
         description: 'Register for instructor training session',
         status: 'active',
-        targetAudience: 'instructor',
+        targetUsers: ['instructor'],
+        createdAt: new Date('2024-01-01'),
+        updatedAt: new Date('2024-01-01'),
         viewCount: 10,
         eventDetails: {
             dayAndDate: 'July 20, 2025',
@@ -26,7 +28,9 @@ export const defaultForms = [
         title: 'Advanced Coaching Workshop',
         description: 'Advanced techniques for instructors',
         status: 'active',
-        targetAudience: 'instructor',
+        targetUsers: ['instructor'],
+        createdAt: new Date('2024-01-02'),
+        updatedAt: new Date('2024-01-02'),
         viewCount: 5,
         eventDetails: {
             dayAndDate: 'August 5, 2025',
@@ -39,7 +43,7 @@ export const defaultSubmissions = [
     {
         id: 'submission-1',
         formId: 'form-1',
-        submitterId: 'instructor-123',
+        submitterId: '__current_user__',
         confirmationStatus: 'attending',
         attendeesCount: 1,
         submittedAt: new Date('2024-03-10'),
@@ -94,8 +98,12 @@ export function runInstructorFormsPageTests(setupFn: SetupFunction, options: Run
         });
 
         const availableFormsSection = screen.getByText('Available Training Events').closest('.forms-section') as HTMLElement;
-        const viewButtons = within(availableFormsSection).getAllByRole('button', { name: /view/i });
-        await user.click(viewButtons[0]);
+
+        // Find the specific card for "Instructor Training Registration"
+        const formCard = within(availableFormsSection).getByText('Instructor Training Registration').closest('.available-form-card') as HTMLElement;
+        const viewBtn = within(formCard).getByRole('button', { name: /^view$/i });
+
+        await user.click(viewBtn);
 
         // FormViewModal should be open
         await waitFor(() => {
