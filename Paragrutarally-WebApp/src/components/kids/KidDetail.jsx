@@ -172,6 +172,7 @@ function KidDetailView() {
 
     const fullName = `${kidData.personalInfo?.firstName || kidData.firstName || ''} ${kidData.personalInfo?.lastName || kidData.lastName || ''}`.trim();
     const age = calculateAge(kidData.personalInfo?.dateOfBirth || kidData.dateOfBirth);
+    const gender = kidData.personalInfo?.gender || kidData.gender;
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -270,7 +271,7 @@ function KidDetailView() {
                                     <div className="space-y-1">
                                         <label className="block text-sm font-medium text-gray-700">Gender</label>
                                         <div className="text-gray-700 bg-gray-50 px-3 py-2 rounded border">
-                                            {kidData.gender ? kidData.gender.charAt(0).toUpperCase() + kidData.gender.slice(1) : 'Not specified'}
+                                            {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : 'Not specified'}
                                         </div>
                                     </div>
 

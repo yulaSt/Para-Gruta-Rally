@@ -64,6 +64,16 @@
     background-color: var(--bg-tertiary);
 }
 
+.user-name {
+    color: var(--text-primary);
+    font-weight: 500;
+    margin: 0 5px;
+    white-space: nowrap;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .sign-out-btn {
     background-color: transparent;
     border: 1px solid #d32f2f;

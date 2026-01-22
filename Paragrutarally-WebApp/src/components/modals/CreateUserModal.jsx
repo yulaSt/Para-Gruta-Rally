@@ -237,29 +237,6 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
                         </h4>
 
                         <div className="form-grid">
-                            <div className={`form-group ${errors.displayName ? 'error' : ''}`}>
-                                <label htmlFor="displayName">
-                                    {t('users.displayName', 'Display Name')} *
-                                </label>
-                                <input
-                                    type="text"
-                                    id="displayName"
-                                    name="displayName"
-                                    value={formData.displayName}
-                                    onChange={handleInputChange}
-                                    disabled={isLoading}
-                                    placeholder={t('users.displayNamePlaceholder', 'Enter display name')}
-                                    className="form-input"
-                                    aria-describedby={errors.displayName ? 'displayName-error' : undefined}
-                                    aria-invalid={!!errors.displayName}
-                                />
-                                {errors.displayName && (
-                                    <div id="displayName-error" className="error-text" role="alert">
-                                        {errors.displayName}
-                                    </div>
-                                )}
-                            </div>
-
                             <div className={`form-group ${errors.name ? 'error' : ''}`}>
                                 <label htmlFor="name">
                                     {t('users.fullName', 'Full Name')} *
@@ -279,6 +256,29 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
                                 {errors.name && (
                                     <div id="name-error" className="error-text" role="alert">
                                         {errors.name}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className={`form-group ${errors.displayName ? 'error' : ''}`}>
+                                <label htmlFor="displayName">
+                                    {t('users.displayName', 'Display Name')}
+                                </label>
+                                <input
+                                    type="text"
+                                    id="displayName"
+                                    name="displayName"
+                                    value={formData.displayName}
+                                    onChange={handleInputChange}
+                                    disabled={isLoading}
+                                    placeholder={t('users.displayNamePlaceholder', 'Enter display name')}
+                                    className="form-input"
+                                    aria-describedby={errors.displayName ? 'displayName-error' : undefined}
+                                    aria-invalid={!!errors.displayName}
+                                />
+                                {errors.displayName && (
+                                    <div id="displayName-error" className="error-text" role="alert">
+                                        {errors.displayName}
                                     </div>
                                 )}
                             </div>

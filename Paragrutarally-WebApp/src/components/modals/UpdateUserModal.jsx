@@ -142,7 +142,7 @@ const UpdateUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
 
     return (
         <div className="form-creation-modal-overlay" dir={isRTL ? 'rtl' : 'ltr'}>
-            <div 
+            <div
                 className="form-creation-modal-content"
                 role="dialog"
                 aria-modal="true"
@@ -181,7 +181,7 @@ const UpdateUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
                         <div className="form-grid">
                             <div className={`form-group ${errors.displayName ? 'error' : ''}`}>
                                 <label htmlFor="displayName">
-                                    {t('users.displayName', 'Display Name')} *
+                                    {t('users.displayName', 'Display Name')}
                                 </label>
                                 <input
                                     type="text"

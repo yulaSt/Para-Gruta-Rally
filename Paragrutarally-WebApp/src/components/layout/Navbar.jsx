@@ -47,6 +47,9 @@ const Navbar = ({ userRole }) => {
                         <Link to="/my-account">{t('nav.myAccount', 'My Account')}</Link>
                         <LanguageSelector />
                         <DarkModeToggle className="navbar-theme-toggle" />
+                        <span className="user-name">
+                            {currentUser.displayName || currentUser.email}
+                        </span>
                         <button onClick={handleSignOut} className="sign-out-btn">
                             {t('nav.signOut', 'Sign Out')}
                         </button>

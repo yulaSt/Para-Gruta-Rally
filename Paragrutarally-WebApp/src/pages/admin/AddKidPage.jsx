@@ -702,6 +702,19 @@ const AddKidPage = () => {
                                     )}
                                 </div>
 
+                                <div className="form-group">
+                                    <label className="form-label">{t('addKid.gender', '👦👧 Gender')}</label>
+                                    <select
+                                        className="form-select"
+                                        value={formData.personalInfo.gender || ''}
+                                        onChange={(e) => handleInputChange('personalInfo.gender', e.target.value)}
+                                    >
+                                        <option value="">{t('addKid.genderNotSpecified', 'Not specified')}</option>
+                                        <option value="boy">{t('addKid.genderBoy', 'Boy')}</option>
+                                        <option value="girl">{t('addKid.genderGirl', 'Girl')}</option>
+                                    </select>
+                                </div>
+
                                 <div className="form-group full-width">
                                     <label className="form-label">{t('addKid.homeBaseLocation', '🏠 Home Base Location')}</label>
                                     <input

@@ -116,6 +116,7 @@ service cloud.firestore {
       }
 
       allow read: if isAuthenticated() && (isAdmin() || isHostOrGuest() || isKidParent());
+      allow read: if isAuthenticated() && (isAdmin() || isHostOrGuest() || isKidParent());
 
       allow create, delete: if isAdmin();
 

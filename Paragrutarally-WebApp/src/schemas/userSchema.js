@@ -35,7 +35,6 @@ export const createEmptyUser = () => ({
 // Validation rules
 export const userValidationRules = {
     required: [
-        'displayName',
         'email',
         'name',
         'phone',

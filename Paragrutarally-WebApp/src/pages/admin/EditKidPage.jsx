@@ -839,6 +839,19 @@ const EditKidPage = () => {
                                     )}
                                 </div>
 
+                                <div className="form-group">
+                                    <label className="form-label">{t('editKid.gender', '👦👧 Gender')}</label>
+                                    <select
+                                        className="form-select"
+                                        value={formData.personalInfo.gender || ''}
+                                        onChange={(e) => handleInputChange('personalInfo.gender', e.target.value)}
+                                    >
+                                        <option value="">{t('editKid.genderNotSpecified', 'Not specified')}</option>
+                                        <option value="boy">{t('editKid.genderBoy', 'Boy')}</option>
+                                        <option value="girl">{t('editKid.genderGirl', 'Girl')}</option>
+                                    </select>
+                                </div>
+
                                 <div className="form-group full-width">
                                     <label
                                         className="form-label">{t('editKid.homeBaseLocation', '🏠 Home Base Location')}</label>

@@ -15,6 +15,7 @@ export const createEmptyKid = () => ({
     personalInfo: {
         firstName: '',
         lastName: '',
+        gender: '', // 'boy' or 'girl' (optional)
         address: '',
         dateOfBirth: '', // ISO date string (YYYY-MM-DD)
         capabilities: '',
@@ -81,7 +82,6 @@ export const kidValidationRules = {
         'personalInfo.firstName',
         'personalInfo.lastName',
         'personalInfo.dateOfBirth',
-        'parentInfo.name',
         'parentInfo.email',
         'parentInfo.phone'
     ],
