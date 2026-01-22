@@ -43,11 +43,11 @@ async function setupRegularUser(userId: string, role = 'instructor') {
 }
 
 // Helper to set up a kid with parent info
-async function setupKid(kidId: string, parentId: string) {
+async function setupKid(kidId: string, parentId: string, parentIds: string[] = [parentId]) {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await context.firestore().collection('kids').doc(kidId).set({
       name: 'Test Kid',
-      parentInfo: { parentId },
+      parentInfo: { parentId, parentIds },
     });
   });
 }
@@ -307,10 +307,24 @@ describeWithFirestoreEmulator('Firestore rules', () => {
       await expectFirestorePermissionDenied(db.collection('kids').doc('kid1').get());
     });
 
-    test('authenticated user can read kids', async () => {
+    test('non-parent (instructor role) cannot read kids', async () => {
       await setupRegularUser('alice');
       await setupKid('kid1', 'bob');
       const db = testEnv.authenticatedContext('alice').firestore();
+      await expectFirestorePermissionDenied(db.collection('kids').doc('kid1').get());
+    });
+
+    test('host can read kids', async () => {
+      await setupRegularUser('host1', 'host');
+      await setupKid('kid1', 'bob');
+      const db = testEnv.authenticatedContext('host1').firestore();
+      await expectPermissionGetSucceeds(db.collection('kids').doc('kid1').get());
+    });
+
+    test('guest can read kids', async () => {
+      await setupRegularUser('guest1', 'guest');
+      await setupKid('kid1', 'bob');
+      const db = testEnv.authenticatedContext('guest1').firestore();
       await expectPermissionGetSucceeds(db.collection('kids').doc('kid1').get());
     });
 
@@ -336,6 +350,16 @@ describeWithFirestoreEmulator('Firestore rules', () => {
       const db = testEnv.authenticatedContext('parent1').firestore();
       await expectFirestorePermissionSucceeds(
         db.collection('kids').doc('kid1').update({ name: 'Updated Name' })
+      );
+    });
+
+    test('secondary parent (in parentIds) can update kid', async () => {
+      await setupRegularUser('primary-parent', 'parent');
+      await setupRegularUser('secondary-parent', 'parent');
+      await setupKid('kid1', 'primary-parent', ['primary-parent', 'secondary-parent']);
+      const db = testEnv.authenticatedContext('secondary-parent').firestore();
+      await expectFirestorePermissionSucceeds(
+        db.collection('kids').doc('kid1').update({ name: 'Secondary Parent Updated' })
       );
     });
 

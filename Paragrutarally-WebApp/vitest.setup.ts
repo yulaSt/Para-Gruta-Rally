@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, vi } from 'vitest';
+import * as net from 'node:net';
 
 function readViteEnv(key: string): string | undefined {
   // In Vitest, `import.meta.env` may exist but not include values unless provided.
@@ -16,16 +17,70 @@ process.env.VITE_FIREBASE_STORAGE_BUCKET ??= 'test-project.appspot.com';
 process.env.VITE_FIREBASE_MESSAGING_SENDER_ID ??= 'test-sender';
 process.env.VITE_FIREBASE_APP_ID ??= 'test-app-id';
 
+function parseHostAndPort(hostAndPort: string | undefined): { host: string; port: number } | undefined {
+  if (hostAndPort == null) return undefined;
+  const [host, portString] = hostAndPort.split(':');
+  const port = Number(portString);
+  return Number.isFinite(port) ? { host, port } : undefined;
+}
+
+async function canConnectTcp(host: string, port: number, timeoutMs = 200): Promise<boolean> {
+  return await new Promise<boolean>((resolve) => {
+    const socket = new net.Socket();
+    const cleanup = () => {
+      socket.removeAllListeners();
+      socket.destroy();
+    };
+
+    socket.setTimeout(timeoutMs);
+
+    socket.once('connect', () => {
+      cleanup();
+      resolve(true);
+    });
+    socket.once('timeout', () => {
+      cleanup();
+      resolve(false);
+    });
+    socket.once('error', () => {
+      cleanup();
+      resolve(false);
+    });
+
+    socket.connect(port, host);
+  });
+}
+
 // Prefer explicitly enabling emulators during integration tests.
-// If `.env` enables emulators but the test run didn't start them (no hub), force-disable to avoid network failures.
+// If `.env` enables emulators, keep them enabled when they're reachable (even if the hub env var isn't present).
 {
   const requested = readViteEnv('VITE_USE_FIREBASE_EMULATORS');
+  const wantsEmulators = requested === 'true';
   const hasEmulatorHub = Boolean(process.env.FIREBASE_EMULATOR_HUB);
 
-  if (requested === 'true' && !hasEmulatorHub) {
-    process.env.VITE_USE_FIREBASE_EMULATORS = 'false';
-  } else {
+  if (!wantsEmulators) {
     process.env.VITE_USE_FIREBASE_EMULATORS = requested ?? 'false';
+  } else {
+    const firestoreEmulator = parseHostAndPort(process.env.FIRESTORE_EMULATOR_HOST) ?? {
+      host: '127.0.0.1',
+      port: 8080,
+    };
+    const authEmulator = parseHostAndPort(process.env.FIREBASE_AUTH_EMULATOR_HOST) ?? {
+      host: '127.0.0.1',
+      port: 9099,
+    };
+
+    const reachable =
+      hasEmulatorHub ||
+      (await canConnectTcp(firestoreEmulator.host, firestoreEmulator.port)) ||
+      (await canConnectTcp(authEmulator.host, authEmulator.port));
+
+    process.env.VITE_USE_FIREBASE_EMULATORS = reachable ? 'true' : 'false';
+
+    if (reachable) {
+      process.env.FIRESTORE_EMULATOR_HOST ??= `${firestoreEmulator.host}:${firestoreEmulator.port}`;
+      process.env.FIREBASE_AUTH_EMULATOR_HOST ??= `${authEmulator.host}:${authEmulator.port}`;
+    }
   }
 }
 

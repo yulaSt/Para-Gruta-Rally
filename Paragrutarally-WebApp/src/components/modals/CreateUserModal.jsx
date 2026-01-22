@@ -1,9 +1,8 @@
 // src/components/modals/CreateUserModal.jsx - UPDATED WITH CLEAN MODAL STRUCTURE
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, connectAuthEmulator, getAuth } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
 import { db } from '@/firebase/config.js';
 import { useLanguage } from '../../contexts/LanguageContext';
 import {
@@ -93,6 +92,12 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
             const timestamp = Date.now();
             const secondaryApp = initializeApp(firebaseConfig, `CreateUser_${timestamp}`);
             const secondaryAuth = getAuth(secondaryApp);
+
+            const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ||
+                (typeof process !== 'undefined' && process.env?.VITE_USE_FIREBASE_EMULATORS === 'true');
+            if (useEmulators) {
+                connectAuthEmulator(secondaryAuth, 'http://127.0.0.1:9099');
+            }
 
 
 

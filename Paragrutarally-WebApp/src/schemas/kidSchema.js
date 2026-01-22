@@ -27,9 +27,19 @@ export const createEmptyKid = () => ({
         name: '',
         email: '',
         phone: '',
-        phone: '',
         parentId: '', // DEPRECATED: Use parentIds instead
         parentIds: [], // Reference to parent user documents (plural)
+        grandparentsInfo: {
+            names: '',
+            phone: ''
+        }
+    },
+
+    // Second Parent/Guardian Information (optional)
+    secondParentInfo: {
+        name: '',
+        email: '',
+        phone: '',
         grandparentsInfo: {
             names: '',
             phone: ''
@@ -77,12 +87,15 @@ export const kidValidationRules = {
     ],
 
     email: [
-        'parentInfo.email'
+        'parentInfo.email',
+        'secondParentInfo.email'
     ],
 
     phone: [
         'parentInfo.phone',
-        'parentInfo.grandparentsInfo.phone'
+        'parentInfo.grandparentsInfo.phone',
+        'secondParentInfo.phone',
+        'secondParentInfo.grandparentsInfo.phone'
     ],
 
     date: [
@@ -100,6 +113,11 @@ export const kidValidationRules = {
         'parentInfo.phone': 20,
         'parentInfo.grandparentsInfo.names': 200,
         'parentInfo.grandparentsInfo.phone': 20,
+        'secondParentInfo.name': 100,
+        'secondParentInfo.email': 100,
+        'secondParentInfo.phone': 20,
+        'secondParentInfo.grandparentsInfo.names': 200,
+        'secondParentInfo.grandparentsInfo.phone': 20,
         'additionalComments': 1000
     }
 };
@@ -298,6 +316,12 @@ export const convertFirestoreToKid = (doc) => {
         id: doc.id
     };
 
+    // Ensure parentInfo defaults exist (data merge is shallow)
+    if (!mergedData.parentInfo) mergedData.parentInfo = kid.parentInfo;
+    if (!mergedData.parentInfo.grandparentsInfo) {
+        mergedData.parentInfo.grandparentsInfo = kid.parentInfo.grandparentsInfo;
+    }
+
     // Ensure parentIds exists
     if (mergedData.parentInfo && !mergedData.parentInfo.parentIds) {
         mergedData.parentInfo.parentIds = [];
@@ -305,6 +329,12 @@ export const convertFirestoreToKid = (doc) => {
         if (mergedData.parentInfo.parentId) {
             mergedData.parentInfo.parentIds.push(mergedData.parentInfo.parentId);
         }
+    }
+
+    // Ensure secondParentInfo defaults exist (data merge is shallow)
+    if (!mergedData.secondParentInfo) mergedData.secondParentInfo = kid.secondParentInfo;
+    if (!mergedData.secondParentInfo.grandparentsInfo) {
+        mergedData.secondParentInfo.grandparentsInfo = kid.secondParentInfo.grandparentsInfo;
     }
 
     // Convert Firestore Timestamps to Date objects for display

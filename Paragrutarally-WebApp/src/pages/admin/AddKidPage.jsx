@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Dashboard from '../../components/layout/Dashboard';
 import CreateUserModal from '../../components/modals/CreateUserModal';
+import ParentSelector from '../../components/common/ParentSelector';
 import { useTheme } from '../../contexts/ThemeContext';
 import { usePermissions } from '../../hooks/usePermissions.jsx';
 import { addKid, getNextParticipantNumber } from '../../services/kidService';
@@ -23,17 +24,9 @@ import {
     IconUser as User,
     IconUsers as Users,
     IconHeart as Heart,
-    IconPhone as Phone,
-    IconMail as Mail,
-    IconMapPin as MapPin,
-    IconCalendar as Calendar,
     IconNotes as FileText,
     IconSparkles as Sparkles,
-    IconUserPlus as UserPlus,
-    IconLock as Lock,
     IconCamera as Camera,
-    IconUpload as Upload,
-    IconX as X,
     IconTrash as Trash2
 } from '@tabler/icons-react';
 import './AddKidPage.css';
@@ -60,6 +53,11 @@ const AddKidPage = () => {
     const [selectedParentId, setSelectedParentId] = useState('');
     const [selectedParentData, setSelectedParentData] = useState(null);
     const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+
+    // Second parent state
+    const [showSecondParent, setShowSecondParent] = useState(false);
+    const [selectedSecondParentId, setSelectedSecondParentId] = useState('');
+    const [selectedSecondParentData, setSelectedSecondParentData] = useState(null);
 
     // Photo upload state
     const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -281,16 +279,17 @@ const AddKidPage = () => {
         if (fileInput) fileInput.value = '';
     };
 
-    // Handle parent selection
-    const handleParentSelection = (parentId) => {
-        if (parentId === 'create_new') {
-            if (window.confirm(t('addKid.confirmCreateNewParent', 'This will open a form to create a new parent user. Continue?'))) {
-                setShowCreateUserModal(true);
-            }
-            setSelectedParentId('');
-            return;
-        }
+    // Helper to build parentIds array from both parent selections (supports up to 2 parents)
+    const buildParentIds = (firstParentId, secondParentId) => {
+        const ids = [];
+        [firstParentId, secondParentId].forEach((id) => {
+            if (id && !ids.includes(id)) ids.push(id);
+        });
+        return ids.slice(0, 2);
+    };
 
+    // Handle parent selection from dropdown
+    const handleParentSelection = (parentId) => {
         setSelectedParentId(parentId);
 
         if (parentId) {
@@ -304,7 +303,8 @@ const AddKidPage = () => {
                         name: parent.name || parent.displayName || '',
                         email: parent.email || '',
                         phone: parent.phone || '',
-                        parentIds: [parent.id],
+                        parentId: parent.id, // Backward compatibility
+                        parentIds: buildParentIds(parent.id, selectedSecondParentId),
                         grandparentsInfo: prev.parentInfo.grandparentsInfo
                     }
                 }));
@@ -314,13 +314,80 @@ const AddKidPage = () => {
             setFormData(prev => ({
                 ...prev,
                 parentInfo: {
+                    ...prev.parentInfo,
                     name: '',
                     email: '',
                     phone: '',
-                    parentIds: [],
+                    parentId: '',
+                    parentIds: buildParentIds(null, selectedSecondParentId),
                     grandparentsInfo: prev.parentInfo.grandparentsInfo
                 }
             }));
+        }
+    };
+
+    // Handle second parent selection from dropdown
+    const handleSecondParentSelection = (parentId) => {
+        setSelectedSecondParentId(parentId);
+
+        if (parentId) {
+            const parent = parents.find(p => p.id === parentId);
+            if (parent) {
+                setSelectedSecondParentData(parent);
+                setFormData(prev => ({
+                    ...prev,
+                    secondParentInfo: {
+                        ...prev.secondParentInfo,
+                        name: parent.name || parent.displayName || '',
+                        email: parent.email || '',
+                        phone: parent.phone || ''
+                    },
+                    parentInfo: {
+                        ...prev.parentInfo,
+                        parentIds: buildParentIds(selectedParentId, parent.id)
+                    }
+                }));
+            }
+        } else {
+            setSelectedSecondParentData(null);
+            setFormData(prev => ({
+                ...prev,
+                secondParentInfo: {
+                    ...prev.secondParentInfo,
+                    name: '',
+                    email: '',
+                    phone: ''
+                },
+                parentInfo: {
+                    ...prev.parentInfo,
+                    parentIds: buildParentIds(selectedParentId, null)
+                }
+            }));
+        }
+    };
+
+    // Handle toggling second parent checkbox
+    const handleToggleSecondParent = (checked) => {
+        setShowSecondParent(checked);
+        if (!checked) {
+            // Clear second parent when unchecking
+            setSelectedSecondParentId('');
+            setSelectedSecondParentData(null);
+            setFormData(prev => ({
+                ...prev,
+                secondParentInfo: createEmptyKid().secondParentInfo,
+                parentInfo: {
+                    ...prev.parentInfo,
+                    parentIds: buildParentIds(selectedParentId, null)
+                }
+            }));
+        }
+    };
+
+    // Handle opening create user modal
+    const handleOpenCreateUserModal = () => {
+        if (window.confirm(t('addKid.confirmCreateNewParent', 'This will open a form to create a new parent user. Continue?'))) {
+            setShowCreateUserModal(true);
         }
     };
 
@@ -336,7 +403,7 @@ const AddKidPage = () => {
     };
 
     const validateForm = () => {
-        const validation = validateKid(formData);
+        const validation = validateKid(formData, t);
 
         if (!validation.isValid) {
             setErrors(validation.errors);
@@ -686,153 +753,86 @@ const AddKidPage = () => {
                                 <h2>{t('addKid.racingFamilyInfo', '👨‍👩‍👧‍👦 Racing Family Info')}</h2>
                             </div>
                             <div className="form-grid">
-                                {/* Parent Selection Dropdown */}
+                                {/* First Parent */}
+                                <ParentSelector
+                                    parents={parents}
+                                    selectedParentId={selectedParentId}
+                                    selectedParentData={selectedParentData}
+                                    excludeParentIds={selectedSecondParentId ? [selectedSecondParentId] : []}
+                                    parentName={formData.parentInfo.name}
+                                    parentEmail={formData.parentInfo.email}
+                                    parentPhone={formData.parentInfo.phone}
+                                    grandparentsNames={formData.parentInfo.grandparentsInfo.names}
+                                    grandparentsPhone={formData.parentInfo.grandparentsInfo.phone}
+                                    onSelectParent={handleParentSelection}
+                                    onCreateNew={handleOpenCreateUserModal}
+                                    onNameChange={(value) => handleInputChange('parentInfo.name', value)}
+                                    onEmailChange={(value) => handleInputChange('parentInfo.email', value)}
+                                    onPhoneChange={(value) => handleInputChange('parentInfo.phone', value)}
+                                    onGrandparentsNamesChange={(value) => handleInputChange('parentInfo.grandparentsInfo.names', value)}
+                                    onGrandparentsPhoneChange={(value) => handleInputChange('parentInfo.grandparentsInfo.phone', value)}
+                                    nameError={getErrorMessage('parentInfo.name')}
+                                    emailError={getErrorMessage('parentInfo.email')}
+                                    phoneError={getErrorMessage('parentInfo.phone')}
+                                    hasNameError={hasFieldError('parentInfo.name')}
+                                    hasEmailError={hasFieldError('parentInfo.email')}
+                                    hasPhoneError={hasFieldError('parentInfo.phone')}
+                                    t={t}
+                                    isRequired={true}
+                                />
+
+                                {/* Add Second Parent Checkbox */}
                                 <div className="form-group full-width">
-                                    <label className="form-label">{t('addKid.selectParentGuardian', '👤 Select Parent/Guardian')} *</label>
-                                    <div className="parent-selection-container">
-                                        <select
-                                            value={selectedParentId}
-                                            onChange={(e) => handleParentSelection(e.target.value)}
-                                            className={`form-select ${hasFieldError('parentInfo.parentId') ? 'error' : ''}`}
-                                        >
-                                            <option value="">{t('addKid.chooseParentAccount', '🔗 Choose Parent Account')}</option>
-                                            {parents.map(parent => (
-                                                <option key={parent.id} value={parent.id}>
-                                                    {parent.displayName || parent.name} ({parent.email})
-                                                </option>
-                                            ))}
-                                            <option value="create_new">{t('addKid.createNewParent', '➕ Create New Parent')}</option>
-                                        </select>
-                                        <button
-                                            type="button"
-                                            className="btn-create-parent"
-                                            onClick={() => handleParentSelection('create_new')}
-                                        >
-                                            <UserPlus size={18} />
-                                            {t('addKid.createNewParent', 'Create New Parent')}
-                                        </button>
-                                    </div>
-                                    {getErrorMessage('parentInfo.parentId') && (
-                                        <span className="error-text">{getErrorMessage('parentInfo.parentId')}</span>
-                                    )}
+                                    <label className="checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={showSecondParent}
+                                            onChange={(e) => handleToggleSecondParent(e.target.checked)}
+                                        />
+                                        {t('addKid.addSecondParent', '👥 Add Second Parent/Guardian')}
+                                    </label>
                                 </div>
 
-                                {/* Parent Info Fields - Show when parent is selected */}
-                                {selectedParentData && (
-                                    <>
-                                        <div className="form-group">
-                                            <label className="form-label">
-                                                {t('addKid.parentGuardianName', '👤 Parent/Guardian Name')} *
-                                                <Lock size={14} className="lock-icon" />
-                                            </label>
-                                            <input
-                                                type="text"
-                                                className="form-input locked"
-                                                value={formData.parentInfo.name}
-                                                readOnly
-                                                disabled
-                                            />
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label className="form-label">
-                                                {t('addKid.emailAddress', '📧 Email Address')} *
-                                                <Lock size={14} className="lock-icon" />
-                                            </label>
-                                            <input
-                                                type="email"
-                                                className="form-input locked"
-                                                value={formData.parentInfo.email}
-                                                readOnly
-                                                disabled
-                                            />
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label className="form-label">
-                                                {t('addKid.phoneNumber', '📱 Phone Number')} *
-                                                <Lock size={14} className="lock-icon" />
-                                            </label>
-                                            <input
-                                                type="tel"
-                                                className="form-input locked"
-                                                value={formData.parentInfo.phone}
-                                                readOnly
-                                                disabled
-                                            />
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Manual Entry Fields - Show when no parent is selected */}
-                                {!selectedParentData && (
-                                    <>
-                                        <div className="form-group">
-                                            <label className="form-label">{t('addKid.parentGuardianName', '👤 Parent/Guardian Name')} *</label>
-                                            <input
-                                                type="text"
-                                                className={`form-input ${hasFieldError('parentInfo.name') ? 'error' : ''}`}
-                                                placeholder={t('addKid.parentNamePlaceholder', 'Racing coach\'s name')}
-                                                value={formData.parentInfo.name}
-                                                onChange={(e) => handleInputChange('parentInfo.name', e.target.value)}
-                                            />
-                                            {getErrorMessage('parentInfo.name') && (
-                                                <span className="error-text">{getErrorMessage('parentInfo.name')}</span>
-                                            )}
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label className="form-label">{t('addKid.emailAddress', '📧 Email Address')} *</label>
-                                            <input
-                                                type="email"
-                                                className={`form-input ${hasFieldError('parentInfo.email') ? 'error' : ''}`}
-                                                placeholder={t('addKid.emailPlaceholder', 'parent@racingfamily.com')}
-                                                value={formData.parentInfo.email}
-                                                onChange={(e) => handleInputChange('parentInfo.email', e.target.value)}
-                                            />
-                                            {getErrorMessage('parentInfo.email') && (
-                                                <span className="error-text">{getErrorMessage('parentInfo.email')}</span>
-                                            )}
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label className="form-label">{t('addKid.phoneNumber', '📱 Phone Number')} *</label>
-                                            <input
-                                                type="tel"
-                                                className={`form-input ${hasFieldError('parentInfo.phone') ? 'error' : ''}`}
-                                                placeholder={t('addKid.phonePlaceholder', 'Racing hotline')}
-                                                value={formData.parentInfo.phone}
-                                                onChange={(e) => handleInputChange('parentInfo.phone', e.target.value)}
-                                            />
-                                            {getErrorMessage('parentInfo.phone') && (
-                                                <span className="error-text">{getErrorMessage('parentInfo.phone')}</span>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Grandparents Info - Always editable */}
-                                <div className="form-group">
-                                    <label className="form-label">{t('addKid.grandparentsNames', '👵👴 Grandparents Names')}</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        placeholder={t('addKid.grandparentsNamesPlaceholder', 'Racing legends in the family')}
-                                        value={formData.parentInfo.grandparentsInfo.names}
-                                        onChange={(e) => handleInputChange('parentInfo.grandparentsInfo.names', e.target.value)}
+                                {/* Second Parent */}
+                                {showSecondParent && (
+                                    <ParentSelector
+                                        parents={parents}
+                                        selectedParentId={selectedSecondParentId}
+                                        selectedParentData={selectedSecondParentData}
+                                        excludeParentIds={selectedParentId ? [selectedParentId] : []}
+                                        parentName={formData.secondParentInfo?.name || ''}
+                                        parentEmail={formData.secondParentInfo?.email || ''}
+                                        parentPhone={formData.secondParentInfo?.phone || ''}
+                                        grandparentsNames={formData.secondParentInfo?.grandparentsInfo?.names || ''}
+                                        grandparentsPhone={formData.secondParentInfo?.grandparentsInfo?.phone || ''}
+                                        onSelectParent={handleSecondParentSelection}
+                                        onCreateNew={handleOpenCreateUserModal}
+                                        onNameChange={(value) => handleInputChange('secondParentInfo.name', value)}
+                                        onEmailChange={(value) => handleInputChange('secondParentInfo.email', value)}
+                                        onPhoneChange={(value) => handleInputChange('secondParentInfo.phone', value)}
+                                        onGrandparentsNamesChange={(value) => handleInputChange('secondParentInfo.grandparentsInfo.names', value)}
+                                        onGrandparentsPhoneChange={(value) => handleInputChange('secondParentInfo.grandparentsInfo.phone', value)}
+                                        nameError={getErrorMessage('secondParentInfo.name')}
+                                        emailError={getErrorMessage('secondParentInfo.email')}
+                                        phoneError={getErrorMessage('secondParentInfo.phone')}
+                                        hasNameError={hasFieldError('secondParentInfo.name')}
+                                        hasEmailError={hasFieldError('secondParentInfo.email')}
+                                        hasPhoneError={hasFieldError('secondParentInfo.phone')}
+                                        t={t}
+                                        isRequired={false}
+                                        labels={{
+                                            selectLabel: t('addKid.selectSecondParent', 'Select Second Parent/Guardian'),
+                                            dropdownPlaceholder: t('addKid.chooseSecondParentAccount', 'Choose Second Parent Account'),
+                                            nameLabel: t('addKid.secondParentName', 'Second Parent Name'),
+                                            emailLabel: t('addKid.secondParentEmail', 'Second Parent Email'),
+                                            phoneLabel: t('addKid.secondParentPhone', 'Second Parent Phone'),
+                                            grandparentsNamesLabel: t('addKid.secondParentGrandparentsNames', 'Second Parent Grandparents Names'),
+                                            grandparentsNamesPlaceholder: t('addKid.secondParentGrandparentsNamesPlaceholder', 'Racing legends in the family'),
+                                            grandparentsPhoneLabel: t('addKid.secondParentGrandparentsPhone', 'Second Parent Grandparents Phone'),
+                                            grandparentsPhonePlaceholder: t('addKid.secondParentGrandparentsPhonePlaceholder', 'Backup racing support')
+                                        }}
                                     />
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">{t('addKid.grandparentsPhone', '☎️ Grandparents Phone')}</label>
-                                    <input
-                                        type="tel"
-                                        className="form-input"
-                                        placeholder={t('addKid.grandparentsPhonePlaceholder', 'Backup racing support')}
-                                        value={formData.parentInfo.grandparentsInfo.phone}
-                                        onChange={(e) => handleInputChange('parentInfo.grandparentsInfo.phone', e.target.value)}
-                                    />
-                                </div>
+                                )}
                             </div>
                         </div>
 

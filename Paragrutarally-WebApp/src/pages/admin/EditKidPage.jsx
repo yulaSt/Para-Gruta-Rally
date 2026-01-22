@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import Dashboard from '../../components/layout/Dashboard';
 import CreateUserModal from '../../components/modals/CreateUserModal';
+import ParentSelector from '../../components/common/ParentSelector';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { usePermissions } from '../../hooks/usePermissions.jsx';
 import { getKidById, updateKid } from '@/services/kidService.js';
 import { uploadKidPhoto, deleteKidPhoto, getKidPhotoInfo } from '@/services/kidPhotoService.js';
 import { getAllTeams, getAllInstructors, updateKidTeam } from '@/services/teamService.js';
-import {validateKid, getFormStatusInfo, getFormStatusOptions} from '@/schemas/kidSchema.js';
+import { createEmptyKid, validateKid, getFormStatusInfo, getFormStatusOptions } from '@/schemas/kidSchema.js';
 import { getDocs, collection, query, where } from 'firebase/firestore';
 import { db } from '@/firebase/config.js';
 import {
@@ -69,6 +70,16 @@ const EditKidPage = () => {
             email: '',
             phone: '',
             parentId: '',
+            parentIds: [],
+            grandparentsInfo: {
+                names: '',
+                phone: ''
+            }
+        },
+        secondParentInfo: {
+            name: '',
+            email: '',
+            phone: '',
             grandparentsInfo: {
                 names: '',
                 phone: ''
@@ -92,6 +103,14 @@ const EditKidPage = () => {
     const [fieldErrors, setFieldErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [focusTeam, setFocusTeam] = useState(false);
+
+    // Parent selection state (supports up to 2 parents)
+    const [selectedParentId, setSelectedParentId] = useState('');
+    const [selectedParentData, setSelectedParentData] = useState(null);
+    const [showSecondParent, setShowSecondParent] = useState(false);
+    const [selectedSecondParentId, setSelectedSecondParentId] = useState('');
+    const [selectedSecondParentData, setSelectedSecondParentData] = useState(null);
+    const [showCreateUserModal, setShowCreateUserModal] = useState(false);
 
     // Photo upload state
     const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -146,7 +165,50 @@ const EditKidPage = () => {
 
             setTeams(teamsData);
             setInstructors(instructorsData);
-            setParents(parentsData.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const parentsList = parentsData.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setParents(parentsList);
+
+            const buildParentIds = (firstParentId, secondParentId) => {
+                const ids = [];
+                [firstParentId, secondParentId].forEach((parentId) => {
+                    if (parentId && !ids.includes(parentId)) ids.push(parentId);
+                });
+                return ids.slice(0, 2);
+            };
+
+            const existingParentIds = Array.isArray(kidData?.parentInfo?.parentIds)
+                ? kidData.parentInfo.parentIds.filter(Boolean)
+                : [];
+            if (existingParentIds.length === 0 && kidData?.parentInfo?.parentId) {
+                existingParentIds.push(kidData.parentInfo.parentId);
+            }
+            const firstParentId = existingParentIds[0] || '';
+            const secondParentId = existingParentIds[1] || '';
+
+            setSelectedParentId(firstParentId);
+            setSelectedSecondParentId(secondParentId);
+            setShowSecondParent(Boolean(secondParentId));
+            setSelectedParentData(parentsList.find(p => p.id === firstParentId) || null);
+            setSelectedSecondParentData(parentsList.find(p => p.id === secondParentId) || null);
+
+            // Ensure new nested defaults exist even for older kids
+            setFormData(prev => ({
+                ...prev,
+                parentInfo: {
+                    ...prev.parentInfo,
+                    parentId: firstParentId || prev.parentInfo?.parentId || '',
+                    parentIds: buildParentIds(firstParentId, secondParentId),
+                    grandparentsInfo: prev.parentInfo?.grandparentsInfo || { names: '', phone: '' }
+                },
+                secondParentInfo: {
+                    ...createEmptyKid().secondParentInfo,
+                    ...prev.secondParentInfo,
+                    grandparentsInfo: {
+                        ...createEmptyKid().secondParentInfo.grandparentsInfo,
+                        ...(prev.secondParentInfo?.grandparentsInfo || {})
+                    }
+                }
+            }));
 
         } catch (error) {
             console.error('Error loading kid data:', error);
@@ -294,7 +356,7 @@ const EditKidPage = () => {
     };
 
     const validateForm = () => {
-        const validation = validateKid(formData);
+        const validation = validateKid(formData, t);
 
         if (!validation.isValid) {
             setErrors(validation.errors);
@@ -310,6 +372,124 @@ const EditKidPage = () => {
         }
 
         return validation.isValid;
+    };
+
+    const buildParentIds = (firstParentId, secondParentId) => {
+        const ids = [];
+        [firstParentId, secondParentId].forEach((parentId) => {
+            if (parentId && !ids.includes(parentId)) ids.push(parentId);
+        });
+        return ids.slice(0, 2);
+    };
+
+    const handleParentSelection = (parentId) => {
+        setSelectedParentId(parentId);
+
+        if (parentId) {
+            const parent = parents.find(p => p.id === parentId);
+            setSelectedParentData(parent || null);
+            if (parent) {
+                setFormData(prev => ({
+                    ...prev,
+                    parentInfo: {
+                        ...prev.parentInfo,
+                        name: parent.name || parent.displayName || '',
+                        email: parent.email || '',
+                        phone: parent.phone || '',
+                        parentId: parent.id, // Backward compatibility
+                        parentIds: buildParentIds(parent.id, selectedSecondParentId),
+                        grandparentsInfo: prev.parentInfo?.grandparentsInfo || { names: '', phone: '' }
+                    }
+                }));
+            }
+            return;
+        }
+
+        setSelectedParentData(null);
+        setFormData(prev => ({
+            ...prev,
+            parentInfo: {
+                ...prev.parentInfo,
+                name: '',
+                email: '',
+                phone: '',
+                parentId: '',
+                parentIds: buildParentIds(null, selectedSecondParentId),
+                grandparentsInfo: prev.parentInfo?.grandparentsInfo || { names: '', phone: '' }
+            }
+        }));
+    };
+
+    const handleSecondParentSelection = (parentId) => {
+        setSelectedSecondParentId(parentId);
+
+        if (parentId) {
+            const parent = parents.find(p => p.id === parentId);
+            setSelectedSecondParentData(parent || null);
+            if (parent) {
+                setFormData(prev => ({
+                    ...prev,
+                    secondParentInfo: {
+                        ...prev.secondParentInfo,
+                        name: parent.name || parent.displayName || '',
+                        email: parent.email || '',
+                        phone: parent.phone || ''
+                    },
+                    parentInfo: {
+                        ...prev.parentInfo,
+                        parentIds: buildParentIds(selectedParentId || prev.parentInfo?.parentId, parent.id)
+                    }
+                }));
+            }
+            return;
+        }
+
+        setSelectedSecondParentData(null);
+        setFormData(prev => ({
+            ...prev,
+            secondParentInfo: {
+                ...prev.secondParentInfo,
+                name: '',
+                email: '',
+                phone: ''
+            },
+            parentInfo: {
+                ...prev.parentInfo,
+                parentIds: buildParentIds(selectedParentId || prev.parentInfo?.parentId, null)
+            }
+        }));
+    };
+
+    const handleToggleSecondParent = (checked) => {
+        setShowSecondParent(checked);
+        if (!checked) {
+            setSelectedSecondParentId('');
+            setSelectedSecondParentData(null);
+            setFormData(prev => ({
+                ...prev,
+                secondParentInfo: createEmptyKid().secondParentInfo,
+                parentInfo: {
+                    ...prev.parentInfo,
+                    parentIds: buildParentIds(selectedParentId || prev.parentInfo?.parentId, null)
+                }
+            }));
+        }
+    };
+
+    const handleOpenCreateUserModal = () => {
+        if (window.confirm(t('editKid.confirmCreateNewParent', 'This will open a form to create a new parent user. Continue?'))) {
+            setShowCreateUserModal(true);
+        }
+    };
+
+    const handleUserCreated = async () => {
+        setShowCreateUserModal(false);
+        try {
+            const parentsSnapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'parent')));
+            setParents(parentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('❌ Error reloading parents:', error);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -706,82 +886,112 @@ const EditKidPage = () => {
                             </div>
                         </div>
 
-                        {/* Parent Information - LOCKED */}
+                        {/* Parent Information */}
                         <div className="form-section parent-section">
                             <div className="section-header">
                                 <Heart className="section-icon" size={24}/>
                                 <h2>{t('editKid.racingFamilyInfo', '👨‍👩‍👧‍👦 Racing Family Info')}</h2>
                             </div>
                             <div className="form-grid">
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        {t('editKid.parentGuardianName', '👤 Parent/Guardian Name')} {t('editKid.required', '*')}
-                                        <Lock size={14} className="lock-icon"/>
+                                {/* First Parent */}
+                                <ParentSelector
+                                    parents={parents}
+                                    selectedParentId={selectedParentId}
+                                    selectedParentData={selectedParentData}
+                                    excludeParentIds={selectedSecondParentId ? [selectedSecondParentId] : []}
+                                    parentName={formData.parentInfo.name}
+                                    parentEmail={formData.parentInfo.email}
+                                    parentPhone={formData.parentInfo.phone}
+                                    grandparentsNames={formData.parentInfo.grandparentsInfo?.names || ''}
+                                    grandparentsPhone={formData.parentInfo.grandparentsInfo?.phone || ''}
+                                    onSelectParent={handleParentSelection}
+                                    onCreateNew={handleOpenCreateUserModal}
+                                    onNameChange={(value) => handleInputChange('parentInfo.name', value)}
+                                    onEmailChange={(value) => handleInputChange('parentInfo.email', value)}
+                                    onPhoneChange={(value) => handleInputChange('parentInfo.phone', value)}
+                                    onGrandparentsNamesChange={(value) => handleInputChange('parentInfo.grandparentsInfo.names', value)}
+                                    onGrandparentsPhoneChange={(value) => handleInputChange('parentInfo.grandparentsInfo.phone', value)}
+                                    nameError={getErrorMessage('parentInfo.name')}
+                                    emailError={getErrorMessage('parentInfo.email')}
+                                    phoneError={getErrorMessage('parentInfo.phone')}
+                                    hasNameError={hasFieldError('parentInfo.name')}
+                                    hasEmailError={hasFieldError('parentInfo.email')}
+                                    hasPhoneError={hasFieldError('parentInfo.phone')}
+                                    t={t}
+                                    isRequired={true}
+                                    labels={{
+                                        selectLabel: t('editKid.selectParentGuardian', 'Select Parent/Guardian'),
+                                        dropdownPlaceholder: t('editKid.chooseParentAccount', 'Choose Parent Account'),
+                                        createNewLabel: t('editKid.createNewParent', 'Create New Parent'),
+                                        nameLabel: t('editKid.parentGuardianName', '👤 Parent/Guardian Name'),
+                                        emailLabel: t('editKid.emailAddress', '📧 Email Address'),
+                                        phoneLabel: t('editKid.phoneNumber', '📱 Phone Number'),
+                                        namePlaceholder: t('editKid.parentNamePlaceholder', "Racing coach's name"),
+                                        emailPlaceholder: t('editKid.emailPlaceholder', 'parent@racingfamily.com'),
+                                        phonePlaceholder: t('editKid.phonePlaceholder', 'Racing hotline'),
+                                        grandparentsNamesLabel: t('editKid.grandparentsNames', 'Grandparents Names'),
+                                        grandparentsNamesPlaceholder: t('editKid.grandparentsNamesPlaceholder', 'Racing legends in the family'),
+                                        grandparentsPhoneLabel: t('editKid.grandparentsPhone', 'Grandparents Phone'),
+                                        grandparentsPhonePlaceholder: t('editKid.grandparentsPhonePlaceholder', 'Backup racing support')
+                                    }}
+                                />
+
+                                {/* Add Second Parent Checkbox */}
+                                <div className="form-group full-width">
+                                    <label className="checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={showSecondParent}
+                                            onChange={(e) => handleToggleSecondParent(e.target.checked)}
+                                        />
+                                        {t('editKid.addSecondParent', '👥 Add Second Parent/Guardian')}
                                     </label>
-                                    <input
-                                        type="text"
-                                        className="form-input locked"
-                                        value={formData.parentInfo.name}
-                                        readOnly
-                                        disabled
-                                        title={t('editKid.lockedField', 'This field cannot be edited')}
-                                    />
                                 </div>
 
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        {t('editKid.emailAddress', '📧 Email Address')} {t('editKid.required', '*')}
-                                        <Lock size={14} className="lock-icon"/>
-                                    </label>
-                                    <input
-                                        type="email"
-                                        className="form-input locked"
-                                        value={formData.parentInfo.email}
-                                        readOnly
-                                        disabled
-                                        title={t('editKid.lockedField', 'This field cannot be edited')}
+                                {/* Second Parent */}
+                                {showSecondParent && (
+                                    <ParentSelector
+                                        parents={parents}
+                                        selectedParentId={selectedSecondParentId}
+                                        selectedParentData={selectedSecondParentData}
+                                        excludeParentIds={selectedParentId ? [selectedParentId] : []}
+                                        parentName={formData.secondParentInfo?.name || ''}
+                                        parentEmail={formData.secondParentInfo?.email || ''}
+                                        parentPhone={formData.secondParentInfo?.phone || ''}
+                                        grandparentsNames={formData.secondParentInfo?.grandparentsInfo?.names || ''}
+                                        grandparentsPhone={formData.secondParentInfo?.grandparentsInfo?.phone || ''}
+                                        onSelectParent={handleSecondParentSelection}
+                                        onCreateNew={handleOpenCreateUserModal}
+                                        onNameChange={(value) => handleInputChange('secondParentInfo.name', value)}
+                                        onEmailChange={(value) => handleInputChange('secondParentInfo.email', value)}
+                                        onPhoneChange={(value) => handleInputChange('secondParentInfo.phone', value)}
+                                        onGrandparentsNamesChange={(value) => handleInputChange('secondParentInfo.grandparentsInfo.names', value)}
+                                        onGrandparentsPhoneChange={(value) => handleInputChange('secondParentInfo.grandparentsInfo.phone', value)}
+                                        nameError={getErrorMessage('secondParentInfo.name')}
+                                        emailError={getErrorMessage('secondParentInfo.email')}
+                                        phoneError={getErrorMessage('secondParentInfo.phone')}
+                                        hasNameError={hasFieldError('secondParentInfo.name')}
+                                        hasEmailError={hasFieldError('secondParentInfo.email')}
+                                        hasPhoneError={hasFieldError('secondParentInfo.phone')}
+                                        t={t}
+                                        isRequired={false}
+                                        labels={{
+                                            selectLabel: t('editKid.selectSecondParent', 'Select Second Parent/Guardian'),
+                                            dropdownPlaceholder: t('editKid.chooseSecondParentAccount', 'Choose Second Parent Account'),
+                                            createNewLabel: t('editKid.createNewParent', 'Create New Parent'),
+                                            nameLabel: t('editKid.secondParentName', 'Second Parent Name'),
+                                            emailLabel: t('editKid.secondParentEmail', 'Second Parent Email'),
+                                            phoneLabel: t('editKid.secondParentPhone', 'Second Parent Phone'),
+                                            namePlaceholder: t('editKid.secondParentNamePlaceholder', "Racing coach's name"),
+                                            emailPlaceholder: t('editKid.secondParentEmailPlaceholder', 'parent@racingfamily.com'),
+                                            phonePlaceholder: t('editKid.secondParentPhonePlaceholder', 'Racing hotline'),
+                                            grandparentsNamesLabel: t('editKid.secondParentGrandparentsNames', 'Second Parent Grandparents Names'),
+                                            grandparentsNamesPlaceholder: t('editKid.secondParentGrandparentsNamesPlaceholder', 'Racing legends in the family'),
+                                            grandparentsPhoneLabel: t('editKid.secondParentGrandparentsPhone', 'Second Parent Grandparents Phone'),
+                                            grandparentsPhonePlaceholder: t('editKid.secondParentGrandparentsPhonePlaceholder', 'Backup racing support')
+                                        }}
                                     />
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        {t('editKid.phoneNumber', '📱 Phone Number')} {t('editKid.required', '*')}
-                                        <Lock size={14} className="lock-icon"/>
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        className="form-input locked"
-                                        value={formData.parentInfo.phone}
-                                        readOnly
-                                        disabled
-                                        title={t('editKid.lockedField', 'This field cannot be edited')}
-                                    />
-                                </div>
-
-                                {/* Grandparents Info - EDITABLE */}
-                                <div className="form-group">
-                                    <label
-                                        className="form-label">{t('editKid.grandparentsNames', '👵👴 Grandparents Names')}</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        placeholder={t('editKid.grandparentsNamesPlaceholder', 'Racing legends in the family')}
-                                        value={formData.parentInfo.grandparentsInfo.names}
-                                        onChange={(e) => handleInputChange('parentInfo.grandparentsInfo.names', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label
-                                        className="form-label">{t('editKid.grandparentsPhone', '☎️ Grandparents Phone')}</label>
-                                    <input
-                                        type="tel"
-                                        className="form-input"
-                                        placeholder={t('editKid.grandparentsPhonePlaceholder', 'Backup racing support')}
-                                        value={formData.parentInfo.grandparentsInfo.phone}
-                                        onChange={(e) => handleInputChange('parentInfo.grandparentsInfo.phone', e.target.value)}
-                                    />
-                                </div>
+                                )}
                             </div>
                         </div>
 
@@ -1016,6 +1226,13 @@ const EditKidPage = () => {
                     </form>
                 </div>
             </div>
+
+            {/* Create User Modal */}
+            <CreateUserModal
+                isOpen={showCreateUserModal}
+                onClose={() => setShowCreateUserModal(false)}
+                onUserCreated={handleUserCreated}
+            />
         </Dashboard>
     );
 };
