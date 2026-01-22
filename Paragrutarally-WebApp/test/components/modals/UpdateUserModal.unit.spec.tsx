@@ -74,9 +74,9 @@ describe('UpdateUserModal', () => {
     render(<UpdateUserModal isOpen={true} onClose={onClose} user={mockUser} onUserUpdated={onUserUpdated} />);
 
     // Change fields
-    const nameInput = screen.getByLabelText(/Display Name/i);
-    await user.clear(nameInput);
-    await user.type(nameInput, 'New Name');
+    const displayNameInput = screen.getByLabelText(/Display Name/i);
+    await user.clear(displayNameInput);
+    await user.type(displayNameInput, 'New Name');
 
     await user.click(screen.getByRole('button', { name: /Update User/i }));
 
@@ -97,11 +97,13 @@ describe('UpdateUserModal', () => {
     render(<UpdateUserModal isOpen={true} onClose={onClose} user={mockUser} onUserUpdated={onUserUpdated} />);
 
     // Clear required field
-    const nameInput = screen.getByLabelText(/Display Name/i);
-    await user.clear(nameInput);
+    const fullNameInput = screen.getByLabelText(/Full Name/i);
+    await user.clear(fullNameInput);
     
     // Button should be disabled because real-time validation caught the error
-    expect(screen.getByRole('button', { name: /Update User/i })).toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Update User/i })).toBeDisabled();
+    });
     
     expect(mockUpdateDoc).not.toHaveBeenCalled();
   });

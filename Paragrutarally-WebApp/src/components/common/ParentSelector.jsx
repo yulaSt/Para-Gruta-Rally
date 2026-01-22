@@ -1,5 +1,5 @@
 // src/components/common/ParentSelector.jsx
-import React from 'react';
+import React, { useId } from 'react';
 import './ParentSelector.css';
 import {
     IconUserPlus as UserPlus,
@@ -51,6 +51,8 @@ const ParentSelector = ({
     // Config
     isRequired = false
 }) => {
+    const selectId = useId();
+
     // Merge provided labels with defaults
     const l = {
         selectLabel: labels.selectLabel || t('addKid.selectParentGuardian', 'Select Parent/Guardian'),
@@ -85,11 +87,12 @@ const ParentSelector = ({
         <>
             {/* Parent Selection Dropdown */}
             <div className="form-group full-width">
-                <label className="form-label">
+                <label className="form-label" htmlFor={selectId}>
                     {l.selectLabel} {isRequired && '*'}
                 </label>
                 <div className="parent-selection-container">
                     <select
+                        id={selectId}
                         value={selectedParentId}
                         onChange={handleSelection}
                         className="form-select"

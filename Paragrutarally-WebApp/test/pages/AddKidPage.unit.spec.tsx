@@ -235,9 +235,8 @@ describe('AddKidPage - Second Parent Feature', () => {
             const checkbox = screen.getByRole('checkbox', { name: /add second parent/i });
             await user.click(checkbox);
 
-            // Find second parent dropdown (there should be two comboboxes now)
-            const dropdowns = screen.getAllByRole('combobox');
-            const secondParentDropdown = dropdowns[1]; // Second dropdown
+            // Find second parent dropdown by label
+            const secondParentDropdown = screen.getByLabelText(/Select Second Parent\/Guardian/i);
 
             expect(secondParentDropdown).toBeInTheDocument();
         });
@@ -247,8 +246,7 @@ describe('AddKidPage - Second Parent Feature', () => {
             await renderAddKidPage();
 
             // Select first parent
-            const dropdowns = screen.getAllByRole('combobox');
-            const firstParentDropdown = dropdowns[0];
+            const firstParentDropdown = screen.getByLabelText(/Select Parent\/Guardian/i);
             await user.selectOptions(firstParentDropdown, 'parent-1');
 
             // Show second parent section
@@ -256,8 +254,7 @@ describe('AddKidPage - Second Parent Feature', () => {
             await user.click(checkbox);
 
             // Get second parent dropdown
-            const updatedDropdowns = screen.getAllByRole('combobox');
-            const secondParentDropdown = updatedDropdowns[1];
+            const secondParentDropdown = screen.getByLabelText(/Select Second Parent\/Guardian/i);
 
             // First parent should not be in second dropdown options
             const options = secondParentDropdown.querySelectorAll('option');
@@ -276,8 +273,7 @@ describe('AddKidPage - Second Parent Feature', () => {
             await user.click(checkbox);
 
             // Select second parent
-            const dropdowns = screen.getAllByRole('combobox');
-            const secondParentDropdown = dropdowns[1];
+            const secondParentDropdown = screen.getByLabelText(/Select Second Parent\/Guardian/i);
             await user.selectOptions(secondParentDropdown, 'parent-2');
 
             // Should show locked fields with Jane's info
@@ -346,16 +342,16 @@ describe('AddKidPage - Second Parent Feature', () => {
             await user.type(dateInput, '2015-01-15');
 
             // Select first parent
-            const dropdowns = screen.getAllByRole('combobox');
-            await user.selectOptions(dropdowns[0], 'parent-1');
+            const firstParentDropdown = screen.getByLabelText(/Select Parent\/Guardian/i);
+            await user.selectOptions(firstParentDropdown, 'parent-1');
 
             // Add second parent
             const checkbox = screen.getByRole('checkbox', { name: /add second parent/i });
             await user.click(checkbox);
 
             // Select second parent
-            const updatedDropdowns = screen.getAllByRole('combobox');
-            await user.selectOptions(updatedDropdowns[1], 'parent-2');
+            const secondParentDropdown = screen.getByLabelText(/Select Second Parent\/Guardian/i);
+            await user.selectOptions(secondParentDropdown, 'parent-2');
 
             // Submit
             const submitButton = screen.getByRole('button', { name: /Add to Racing Team/i });
@@ -440,16 +436,16 @@ describe('AddKidPage - Second Parent Feature', () => {
             await user.type(dateInput, '2015-01-15');
 
             // Select first parent
-            const dropdowns = screen.getAllByRole('combobox');
-            await user.selectOptions(dropdowns[0], 'parent-1');
+            const firstParentDropdown = screen.getByLabelText(/Select Parent\/Guardian/i);
+            await user.selectOptions(firstParentDropdown, 'parent-1');
 
             // Add second parent
             const checkbox = screen.getByRole('checkbox', { name: /add second parent/i });
             await user.click(checkbox);
 
             // Select second parent
-            const updatedDropdowns = screen.getAllByRole('combobox');
-            await user.selectOptions(updatedDropdowns[1], 'parent-2');
+            const secondParentDropdown = screen.getByLabelText(/Select Second Parent\/Guardian/i);
+            await user.selectOptions(secondParentDropdown, 'parent-2');
 
             // Uncheck to remove second parent
             await user.click(checkbox);
