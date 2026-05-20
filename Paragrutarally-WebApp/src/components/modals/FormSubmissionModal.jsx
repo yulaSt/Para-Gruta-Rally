@@ -31,9 +31,18 @@ const FormSubmissionModal = ({
                                  form,
                                  userType = 'parent',
                                  onSubmit
-                             }) => {
+                              }) => {
     const { t } = useLanguage();
     const { user } = usePermissions();
+    const isMounted = React.useRef(true);
+
+    // Track mounted state
+    useEffect(() => {
+        isMounted.current = true;
+        return () => {
+            isMounted.current = false;
+        };
+    }, []);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -109,31 +118,38 @@ const FormSubmissionModal = ({
         try {
             // Get complete user data from Firestore
             const userData = await getUserData(user.uid);
+            if (!isMounted.current) return;
             setCompleteUserData(userData);
 
             // If this is a parent, also load their kids using the userService
             if (userType === 'parent') {
                 try {
                     const kids = await getUserKids(user.uid);
+                    if (!isMounted.current) return;
                     setUserKids(kids || []);
                 } catch (kidsError) {
                     console.warn('⚠️ Failed to load kids from userService, trying fallback method');
                     // Fallback to the original kidService method if needed
                     try {
                         const kids = await getKidsByParent(user.uid);
+                        if (!isMounted.current) return;
                         setUserKids(kids || []);
                     } catch (fallbackError) {
                         console.error('❌ Both kids loading methods failed:', fallbackError);
+                        if (!isMounted.current) return;
                         setUserKids([]);
                     }
                 }
             }
         } catch (error) {
             console.error('❌ Error loading complete user data:', error);
+            if (!isMounted.current) return;
             setCompleteUserData(null);
             setUserKids([]);
         } finally {
-            setIsLoadingUserData(false);
+            if (isMounted.current) {
+                setIsLoadingUserData(false);
+            }
         }
     };
 
