@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@tabler/icons-react': '@tabler/icons-react/dist/esm/icons/index.mjs',
     },
   },
   server: {
@@ -18,6 +19,19 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+  },
+  optimizeDeps: {
+    include: [
+      '@tabler/icons-react',
+      'lucide-react',
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'firebase/app',
+      'firebase/firestore',
+      'firebase/auth',
+      'firebase/storage'
+    ]
   },
   define: {
     // Make sure Vite processes environment variables properly

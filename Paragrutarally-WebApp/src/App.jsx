@@ -1,5 +1,5 @@
 // src/App.jsx - Updated with Role-Based Redirect Handler and Forms Routes
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -23,69 +23,95 @@ import ProtectedRoute, {
 // Import pages
 import Login from './components/auth/Login';
 
-// Admin pages
-import AdminDashboardPage from './pages/admin/AdminDashboardPage';
-import EventManagementPage from './pages/admin/EventManagementPage';
-import CreateEventPage from './pages/admin/CreateEventPage';
-import ViewEventsPage from './pages/admin/ViewEventsPage';
-import EditEventPage from './pages/admin/EditEventPage';
-import UserManagementPage from './pages/admin/UserManagementPage';
-import FormsManagementPage from './pages/admin/FormsManagementPage';
-import FormSubmissionsPage from './pages/admin/FormSubmissionsPage';
-import BackupSyncPage from './pages/admin/BackupSyncPage';
-import ExportPage from './pages/admin/ExportPage.jsx';
-import AnalyticsDashboardPage from './pages/admin/AnalyticsDashboardPage';
+// Admin pages (lazy)
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const EventManagementPage = lazy(() => import('./pages/admin/EventManagementPage'));
+const CreateEventPage = lazy(() => import('./pages/admin/CreateEventPage'));
+const ViewEventsPage = lazy(() => import('./pages/admin/ViewEventsPage'));
+const EditEventPage = lazy(() => import('./pages/admin/EditEventPage'));
+const UserManagementPage = lazy(() => import('./pages/admin/UserManagementPage'));
+const FormsManagementPage = lazy(() => import('./pages/admin/FormsManagementPage'));
+const FormSubmissionsPage = lazy(() => import('./pages/admin/FormSubmissionsPage'));
+const BackupSyncPage = lazy(() => import('./pages/admin/BackupSyncPage'));
+const ExportPage = lazy(() => import('./pages/admin/ExportPage.jsx'));
+const AnalyticsDashboardPage = lazy(() => import('./pages/admin/AnalyticsDashboardPage'));
 
-// Admin Kids Management
-import KidsManagementPage from './pages/admin/KidsManagementPage';
-import AddKidPage from './pages/admin/AddKidPage';
-import EditKidPage from './pages/admin/EditKidPage';
-import ViewKidPage from './pages/admin/ViewKidPage';
+// Admin Kids Management (lazy)
+const KidsManagementPage = lazy(() => import('./pages/admin/KidsManagementPage'));
+const AddKidPage = lazy(() => import('./pages/admin/AddKidPage'));
+const EditKidPage = lazy(() => import('./pages/admin/EditKidPage'));
+const ViewKidPage = lazy(() => import('./pages/admin/ViewKidPage'));
 
-// Admin Teams Management
-import TeamsManagementPage from './pages/admin/TeamsManagementPage';
-import AddTeamPage from './pages/admin/AddTeamPage';
-import EditTeamPage from './pages/admin/EditTeamPage';
-import ViewTeamPage from './pages/admin/ViewTeamPage';
+// Admin Teams Management (lazy)
+const TeamsManagementPage = lazy(() => import('./pages/admin/TeamsManagementPage'));
+const AddTeamPage = lazy(() => import('./pages/admin/AddTeamPage'));
+const EditTeamPage = lazy(() => import('./pages/admin/EditTeamPage'));
+const ViewTeamPage = lazy(() => import('./pages/admin/ViewTeamPage'));
 
-// Admin Vehicles Management
-import VehiclesPage from './pages/admin/VehiclesPage';
-import ViewVehiclePage from './pages/admin/ViewVehiclePage';
-import AddVehiclePage from './pages/admin/AddVehiclePage';
-import EditVehiclePage from './pages/admin/EditVehiclePage';
+// Admin Vehicles Management (lazy)
+const VehiclesPage = lazy(() => import('./pages/admin/VehiclesPage'));
+const ViewVehiclePage = lazy(() => import('./pages/admin/ViewVehiclePage'));
+const AddVehiclePage = lazy(() => import('./pages/admin/AddVehiclePage'));
+const EditVehiclePage = lazy(() => import('./pages/admin/EditVehiclePage'));
 
-// Instructor pages
-import InstructorDashboardPage from './pages/instructor/InstructorDashboardPage';
-import InstructorKidsManagementPage from './pages/instructor/InstructorKidsManagementPage';
-import InstructorTeamsManagementPage from './pages/instructor/InstructorTeamsManagementPage';
-import InstructorVehiclesPage from './pages/instructor/InstructorVehiclesPage';
-import InstructorEventsPage from './pages/instructor/InstructorEventsPage';
-import InstructorFormsPage from './pages/instructor/InstructorFormsPage';
+// Instructor pages (lazy)
+const InstructorDashboardPage = lazy(() => import('./pages/instructor/InstructorDashboardPage'));
+const InstructorKidsManagementPage = lazy(() => import('./pages/instructor/InstructorKidsManagementPage'));
+const InstructorTeamsManagementPage = lazy(() => import('./pages/instructor/InstructorTeamsManagementPage'));
+const InstructorVehiclesPage = lazy(() => import('./pages/instructor/InstructorVehiclesPage'));
+const InstructorEventsPage = lazy(() => import('./pages/instructor/InstructorEventsPage'));
+const InstructorFormsPage = lazy(() => import('./pages/instructor/InstructorFormsPage'));
 
-// Parent pages
-import ParentDashboardPage from './pages/parent/ParentDashboardPage';
-import ParentKidDetailPage from './pages/parent/ParentKidDetailPage';
-import ParentEventPage from './pages/parent/ParentEventPage.jsx';
-import MyFormsPage from './pages/parent/MyFormsPage';
+// Parent pages (lazy)
+const ParentDashboardPage = lazy(() => import('./pages/parent/ParentDashboardPage'));
+const ParentKidDetailPage = lazy(() => import('./pages/parent/ParentKidDetailPage'));
+const ParentEventPage = lazy(() => import('./pages/parent/ParentEventPage.jsx'));
+const MyFormsPage = lazy(() => import('./pages/parent/MyFormsPage'));
 
-// Host pages
-import HostDashboardPage from './pages/host/HostDashboardPage';
+// Host pages (lazy)
+const HostDashboardPage = lazy(() => import('./pages/host/HostDashboardPage'));
 
-// Shared pages
-import GalleryPage from './pages/shared/GalleryPage';
-import MyAccountPage from './pages/shared/MyAccountPage';
+// Shared pages (lazy)
+const GalleryPage = lazy(() => import('./pages/shared/GalleryPage'));
+const MyAccountPage = lazy(() => import('./pages/shared/MyAccountPage'));
 
-// Permission-aware components
-import KidDetailView from './components/kids/KidDetail.jsx';
+// Permission-aware components (lazy)
+const KidDetailView = lazy(() => import('./components/kids/KidDetail.jsx'));
 
 // Import styles
 import './styles/theme.css';
 import './App.css';
 
-// Import legal pages
-import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage';
-import TermsOfServicePage from './pages/legal/TermsOfServicePage';
+// Import legal pages (lazy)
+const PrivacyPolicyPage = lazy(() => import('./pages/legal/PrivacyPolicyPage'));
+const TermsOfServicePage = lazy(() => import('./pages/legal/TermsOfServicePage'));
 
+
+const PageLoader = () => (
+    <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        width: '100vw',
+        flexDirection: 'column',
+        backgroundColor: 'var(--bg-primary, #ffffff)',
+        color: 'var(--text-primary, #333333)',
+        transition: 'background-color 0.3s, color 0.3s'
+    }}>
+        <div style={{
+            width: '40px',
+            height: '40px',
+            border: '4px solid var(--border-color, #e1e5eb)',
+            borderTop: '4px solid var(--accent-color, #3498db)',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+        }}></div>
+        <p style={{ marginTop: '16px', color: 'var(--text-secondary, #666)', fontFamily: 'sans-serif' }}>
+            Loading page...
+        </p>
+    </div>
+);
 
 function App() {
     return (
@@ -97,7 +123,8 @@ function App() {
                             <Router>
                                 <RoleRedirectHandler>
                                     <div className="App">
-                                        <Routes>
+                                        <Suspense fallback={<PageLoader />}>
+                                            <Routes>
                                             {/* ========================================
                                                PUBLIC ROUTES
                                                ======================================== */}
@@ -585,6 +612,7 @@ function App() {
                                             {/* 404 - redirect to login for now, could be enhanced with a proper 404 page */}
                                             <Route path="*" element={<Navigate to="/login" replace />} />
                                         </Routes>
+                                    </Suspense>
                                     </div>
                                 </RoleRedirectHandler>
                             </Router>
