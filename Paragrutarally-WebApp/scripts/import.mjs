@@ -1,6 +1,6 @@
 import admin from "firebase-admin";
 import fs from "fs";
-import serviceAccount from "./credentials.json" with { type: "json" };
+import serviceAccount from "../credentials.json" with { type: "json" };
 
 // 1. Initialize PROD app and get Firestore BEFORE setting emulator env var
 const prodApp = admin.initializeApp({
