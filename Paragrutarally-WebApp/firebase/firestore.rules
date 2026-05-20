@@ -87,19 +87,12 @@ service cloud.firestore {
 
       function isKidParent() {
         return isAuthenticated()
-            && resource != null
-            && resource.data != null
-            && "parentInfo" in resource.data
-            && resource.data.parentInfo is map
             && (
-              // Check parentIds array (new way)
-              ("parentIds" in resource.data.parentInfo 
-               && resource.data.parentInfo.parentIds is list 
-               && uid() in resource.data.parentInfo.parentIds)
-              || 
               // Fallback to parentId (old way) for backward compatibility
-              ("parentId" in resource.data.parentInfo 
-               && resource.data.parentInfo.parentId == uid())
+              resource.data.parentInfo.parentId == uid()
+              ||
+              // Check parentIds array (new way)
+              uid() in resource.data.parentInfo.parentIds
             );
       }
 
@@ -115,7 +108,6 @@ service cloud.firestore {
             && request.resource.data.comments.organization is string;
       }
 
-      allow read: if isAuthenticated() && (isAdmin() || isHostOrGuest() || isKidParent());
       allow read: if isAuthenticated() && (isAdmin() || isHostOrGuest() || isKidParent());
 
       allow create, delete: if isAdmin();

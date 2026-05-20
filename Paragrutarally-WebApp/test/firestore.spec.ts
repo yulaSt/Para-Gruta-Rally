@@ -328,6 +328,27 @@ describeWithFirestoreEmulator('Firestore rules', () => {
       await expectPermissionGetSucceeds(db.collection('kids').doc('kid1').get());
     });
 
+    test('parent can query their own kids by parentIds', async () => {
+      await setupRegularUser('parent1', 'parent');
+      await setupKid('kid1', 'parent1');
+      await setupKid('kid2', 'other-parent');
+      const db = testEnv.authenticatedContext('parent1').firestore();
+
+      await expectPermissionGetSucceeds(
+        db.collection('kids')
+          .where('parentInfo.parentIds', 'array-contains', 'parent1')
+          .get()
+      );
+    });
+
+    test('parent cannot query all kids', async () => {
+      await setupRegularUser('parent1', 'parent');
+      await setupKid('kid1', 'parent1');
+      const db = testEnv.authenticatedContext('parent1').firestore();
+
+      await expectFirestorePermissionDenied(db.collection('kids').get());
+    });
+
     test('regular user cannot create kid records', async () => {
       await setupRegularUser('parent1');
       const db = testEnv.authenticatedContext('parent1').firestore();
