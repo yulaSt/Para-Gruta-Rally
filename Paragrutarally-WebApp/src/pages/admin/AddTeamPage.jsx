@@ -66,7 +66,7 @@ const AddTeamPage = () => {
         displayName: '',
         authProvider: 'email'
     };
-    const [isAddingInlineInstructor, setIsAddingInlineInstructor] = useState(false);
+    const [isAddingInlineInstructor, setIsAddingInlineInstructor] = useState(true);
     const [inlineInstructor, setInlineInstructor] = useState(emptyInlineInstructor);
     const [inlineErrors, setInlineErrors] = useState({});
 

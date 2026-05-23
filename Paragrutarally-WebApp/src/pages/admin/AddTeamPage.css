@@ -175,6 +175,74 @@
 }
 
 /* ========================================
+   INSTRUCTOR MODE SELECTOR (tabs)
+   ======================================== */
+
+.instructor-mode-selector {
+    display: inline-flex;
+    gap: 0;
+    margin-bottom: 20px;
+    padding: 4px;
+    background: var(--bg-secondary, #F3F4F6);
+    border: 1px solid var(--border-color, #E5E7EB);
+    border-radius: 10px;
+}
+
+.instructor-mode-selector .mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.instructor-mode-selector .mode-btn:hover:not(.active) {
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.instructor-mode-selector .mode-btn.active {
+    background: #10B981;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
+}
+
+.dark-mode .instructor-mode-selector,
+.dark .instructor-mode-selector {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .instructor-mode-selector .mode-btn:hover:not(.active),
+.dark .instructor-mode-selector .mode-btn:hover:not(.active) {
+    background: rgba(16, 185, 129, 0.18);
+}
+
+/* ========================================
+   INLINE INSTRUCTOR FORM
+   ======================================== */
+
+.inline-instructor-form {
+    margin-top: 8px;
+    padding: 16px;
+    background: rgba(16, 185, 129, 0.04);
+    border: 1px dashed rgba(16, 185, 129, 0.4);
+    border-radius: 12px;
+}
+
+.dark-mode .inline-instructor-form,
+.dark .inline-instructor-form {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+/* ========================================
    INSTRUCTORS GRID
    ======================================== */
 

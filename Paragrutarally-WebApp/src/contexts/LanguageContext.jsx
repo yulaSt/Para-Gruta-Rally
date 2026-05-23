@@ -639,6 +639,11 @@ export const LANGUAGES = {
         "users.passwordHint": "User can change this password after first login",
         "users.emailHint": "This will be used for login and notifications",
         "users.roleHint": "Select the appropriate role for this user",
+        'users.password': 'Password',
+        'users.location': 'Location',
+        'users.instructorLocationPlaceholder': 'Enter base location / branch',
+        'users.passwordRequired': 'Password is required',
+        'users.passwordTooShort': 'Password must be at least 6 characters',
 
 
         // UserSchema validation error messages
@@ -826,6 +831,8 @@ export const LANGUAGES = {
         'teams.backToTeams': 'Back to Teams',
         'teams.teamIdentity': '🏎️ Team Identity',
         'teams.racingInstructors': '👨‍🏫 Racing Instructors',
+        'teams.selectExistingInstructor': 'Select Existing',
+        'teams.addNewInstructorInline': 'Create New',
         'teams.teamRacers': '🏎️ Team Racers ({current}/{max})',
         'teams.teamNotes': '📝 Team Notes',
         'teams.teamName': 'Team Name',
@@ -2021,6 +2028,7 @@ export const LANGUAGES = {
         // Common elements
         'addTeam.unknownInstructor': 'Unknown Instructor',
         'addTeam.unknown': 'Unknown',
+        'addTeam.pleaseFixInstructorErrors': 'Please fix instructor errors:',
         // Backup & Sync - Additional production strings
         'backup.restore': 'Restore from Backup',
         'backup.restoreDescription': 'Restore your application data from a backup file.',
@@ -3691,6 +3699,7 @@ export const LANGUAGES = {
         // Common elements
         'addTeam.unknownInstructor': 'מדריך לא ידוע',
         'addTeam.unknown': 'לא ידוע',
+        'addTeam.pleaseFixInstructorErrors': 'אנא תקן את שגיאות המדריך:',
         // Add Vehicle Page
         'addVehicle.title': 'הוסף רכב מירוץ חדש!',
         'addVehicle.welcomeTitle': 'ברוכים הבאים לרישום רכב!',
@@ -4277,6 +4286,11 @@ export const LANGUAGES = {
         "users.passwordHint": "המשתמש יכול לשנות את הסיסמה לאחר הכניסה הראשונה",
         "users.emailHint": "זה ישמש להתחברות ולהתראות",
         "users.roleHint": "בחר את התפקיד המתאים למשתמש זה",
+        'users.password': 'סיסמה',
+        'users.location': 'מיקום',
+        'users.instructorLocationPlaceholder': 'הכנס מיקום בסיס / סניף',
+        'users.passwordRequired': 'סיסמה היא שדה חובה',
+        'users.passwordTooShort': 'הסיסמה חייבת להיות באורך של 6 תווים לפחות',
 
         //UserSchema validation error messages
         // Field requirements
@@ -4508,6 +4522,8 @@ export const LANGUAGES = {
         'teams.backToTeams': 'חזור לצוותים',
         'teams.teamIdentity': 'זהות הצוות 🏎️',
         'teams.racingInstructors': 'מדריכי מירוצים 👨‍🏫',
+        'teams.selectExistingInstructor': 'בחר קיים',
+        'teams.addNewInstructorInline': 'צור חדש',
         'teams.teamRacers': 'ילדי הצוות ({current}/{max}) 🏎️',
         'teams.teamNotes': 'הערות צוות 📝',
         'teams.teamName': 'שם הצוות',

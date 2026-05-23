@@ -228,6 +228,10 @@ describeWithFirestoreEmulator('TeamsManagementPage (Integration)', () => {
         const nameInput = screen.getByRole('textbox', { name: /team name/i });
         await user.type(nameInput, 'Integration Team');
 
+        // Default tab is "Create New"; switch to existing-instructor mode to pick a seeded one.
+        const selectExistingBtn = await screen.findByRole('button', { name: /select existing/i }, { timeout: 30000 });
+        await user.click(selectExistingBtn);
+
         // Select Instructor
         const instructorCard = await screen.findByText('Test Instructor');
         await user.click(instructorCard);
@@ -494,6 +498,9 @@ describeWithFirestoreEmulator('TeamsManagementPage (Integration)', () => {
 
         await screen.findByRole('button', { name: /create new/i }, { timeout: 30000 });
         await user.type(screen.getByRole('textbox', { name: /team name/i }), 'Single Instr Team');
+
+        // Default is "Create New"; this test exercises the existing-instructor list, so switch tabs.
+        await user.click(screen.getByRole('button', { name: /select existing/i }));
 
         // Select Alpha
         const alphaCard = (await screen.findByText('Instructor Alpha')).closest('.instructor-card') as HTMLElement;
