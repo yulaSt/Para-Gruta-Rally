@@ -126,11 +126,6 @@
     background: linear-gradient(135deg, #4B5563 0%, #6B7280 100%);
 }
 
-/* Hide any old search-filter-section */
-.search-filter-section {
-    display: none !important;
-}
-
 /* ========================================
    CLICKABLE STAT CARDS - CLEANED UP
    ======================================== */
