@@ -35,8 +35,17 @@ import {
     IconTrash as Trash2,
     IconClock as Clock,
     IconCircleX as XCircle,
-    IconCamera as Camera
+    IconCamera as Camera,
+    IconChevronUp as ChevronUp,
+    IconChevronDown as ChevronDown,
+    IconSelector as Selector
 } from '@tabler/icons-react';
+import {
+    useReactTable,
+    getCoreRowModel,
+    getSortedRowModel,
+    flexRender,
+} from '@tanstack/react-table';
 import './KidsManagementPage.css';
 
 const KidsManagementPage = () => {
@@ -56,6 +65,7 @@ const KidsManagementPage = () => {
     const [showingKidsWithoutTeams, setShowingKidsWithoutTeams] = useState(false);
     const [exportModalOpen, setExportModalOpen] = useState(false);
     const [activeCardFilter, setActiveCardFilter] = useState('total'); // NEW: Track active card
+    const [sorting, setSorting] = useState([{ id: 'name', desc: false }]);
 
     // TEAM CHANGE MODAL STATE
     const [teamModalOpen, setTeamModalOpen] = useState(false);
@@ -424,6 +434,154 @@ const KidsManagementPage = () => {
         kidsWithTeams: kids.filter(k => k.team !== t('kids.noTeam', 'No Team')).length
     };
 
+    const noTeamLabel = t('kids.noTeam', 'No Team');
+
+    const columns = [
+        {
+            accessorKey: 'name',
+            header: () => (<><Baby size={16} style={{ marginRight: '8px' }} />{t('kids.kidInfo', 'Kid Info')}</>),
+            cell: ({ row }) => {
+                const kid = row.original;
+                return (
+                    <div className="kid-info">
+                        <div className="kid-name">
+                            {kid.team === noTeamLabel && <AlertTriangle className="priority-indicator" size={16} />}
+                            {kid.name}
+                        </div>
+                        <div className="parent-name">👨‍👩‍👧‍👦 {kid.parentName}</div>
+                    </div>
+                );
+            },
+            sortingFn: (a, b) => (a.original.name || '').localeCompare(b.original.name || '', undefined, { sensitivity: 'base' }),
+        },
+        {
+            id: 'photo',
+            header: () => (<><Camera size={16} style={{ marginRight: '8px' }} />{t('kids.photo', 'Photo')}</>),
+            cell: ({ row }) => {
+                const kid = row.original;
+                return (
+                    <div className="kid-photo-container">
+                        {kid.hasPhoto ? (
+                            <img src={kid.photoUrl} alt={kid.name} className="table-kid-photo" />
+                        ) : (
+                            <div className="table-kid-photo-placeholder">{kid.initials}</div>
+                        )}
+                    </div>
+                );
+            },
+            enableSorting: false,
+        },
+        {
+            accessorKey: 'age',
+            header: () => (<>🎂 {t('kids.age', 'Age')}</>),
+            sortingFn: (a, b) => {
+                const av = parseInt(a.original.age, 10);
+                const bv = parseInt(b.original.age, 10);
+                const aValid = !isNaN(av);
+                const bValid = !isNaN(bv);
+                if (!aValid && !bValid) return 0;
+                if (!aValid) return 1;
+                if (!bValid) return -1;
+                return av - bv;
+            },
+        },
+        {
+            accessorKey: 'team',
+            header: () => (<><Car size={16} style={{ marginRight: '8px' }} />{t('kids.team', 'Team')}</>),
+            cell: ({ row }) => {
+                const kid = row.original;
+                const noTeam = kid.team === noTeamLabel;
+                return (
+                    <span className={`team-badge ${noTeam ? 'no-team' : 'with-team'}`}>
+                        {noTeam ? (
+                            <>
+                                <AlertTriangle size={14} style={{ marginRight: '4px' }} />
+                                {noTeamLabel}
+                            </>
+                        ) : (
+                            <>
+                                <Car size={14} style={{ marginRight: '4px' }} />
+                                {getTeamNameById(kid.teamId)}
+                            </>
+                        )}
+                    </span>
+                );
+            },
+            sortingFn: (a, b) => (a.original.team || '').localeCompare(b.original.team || '', undefined, { sensitivity: 'base' }),
+        },
+        {
+            accessorKey: 'status',
+            header: () => (<><BarChart3 size={16} style={{ marginRight: '8px' }} />{t('kids.status', 'Status')}</>),
+            cell: ({ row }) => {
+                const kid = row.original;
+                return (
+                    <span className={`status-badge status-${kid.status}`}>
+                        {kid.status === 'active' && <Check size={14} style={{ marginRight: '4px' }} />}
+                        {kid.status === 'completed' && <Check size={14} style={{ marginRight: '4px' }} />}
+                        {kid.status === 'cancelled' && <XCircle size={14} style={{ marginRight: '4px' }} />}
+                        {kid.status === 'pending' && <Clock size={14} style={{ marginRight: '4px' }} />}
+                        {t(`status.${kid.status}`, kid.status.charAt(0).toUpperCase() + kid.status.slice(1))}
+                    </span>
+                );
+            },
+        },
+        {
+            id: 'actions',
+            header: () => (<>⚡ {t('kids.actions', 'Actions')}</>),
+            cell: ({ row }) => {
+                const kid = row.original;
+                return (
+                    <div className="action-buttons-enhanced">
+                        <button
+                            className="btn-action view"
+                            onClick={(e) => { e.stopPropagation(); handleViewKid(kid); }}
+                            title={t('kids.viewDetails', 'View Details')}
+                        >
+                            <Eye size={16} />
+                        </button>
+                        {(userRole === 'admin' || userRole === 'instructor') && (
+                            <button
+                                className={`btn-action ${kid.team === noTeamLabel ? 'assign-team priority' : 'change-team'}`}
+                                onClick={(e) => { e.stopPropagation(); handleChangeTeam(kid); }}
+                                title={kid.team === noTeamLabel ? t('kids.assignTeam', 'Assign Team') : t('kids.changeTeam', 'Change Team')}
+                            >
+                                {kid.team === noTeamLabel ? <Plus size={16} /> : <Car size={16} />}
+                            </button>
+                        )}
+                        {(userRole === 'admin' || userRole === 'instructor') && (
+                            <button
+                                className="btn-action edit"
+                                onClick={(e) => { e.stopPropagation(); handleEditKid(kid); }}
+                                title={t('kids.editKid', 'Edit Kid')}
+                            >
+                                <Edit size={16} />
+                            </button>
+                        )}
+                        {userRole === 'admin' && (
+                            <button
+                                className="btn-action delete"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteKid(kid); }}
+                                title={t('kids.deleteKid', 'Delete Kid')}
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        )}
+                    </div>
+                );
+            },
+            enableSorting: false,
+        },
+    ];
+
+    const table = useReactTable({
+        data: filteredKids,
+        columns,
+        state: { sorting },
+        onSortingChange: setSorting,
+        getCoreRowModel: getCoreRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+    });
+
     if (permissionsLoading) {
         return (
             <Dashboard requiredRole={userRole}>
@@ -649,28 +807,49 @@ const KidsManagementPage = () => {
                     <div className="table-container">
                         <table className="data-table">
                             <thead>
-                                <tr>
-                                    <th><Baby size={16} style={{ marginRight: '8px' }} />{t('kids.kidInfo', 'Kid Info')}</th>
-                                    <th><Camera size={16} style={{ marginRight: '8px' }} />{t('kids.photo', 'Photo')}</th>
-                                    <th>🎂 {t('kids.age', 'Age')}</th>
-                                    <th><Car size={16} style={{ marginRight: '8px' }} />{t('kids.team', 'Team')}</th>
-                                    <th><BarChart3 size={16} style={{ marginRight: '8px' }} />{t('kids.status', 'Status')}</th>
-                                    <th>⚡ {t('kids.actions', 'Actions')}</th>
-                                </tr>
+                                {table.getHeaderGroups().map(headerGroup => (
+                                    <tr key={headerGroup.id}>
+                                        {headerGroup.headers.map(header => {
+                                            const canSort = header.column.getCanSort();
+                                            const sortDir = header.column.getIsSorted();
+                                            return (
+                                                <th
+                                                    key={header.id}
+                                                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                                                    style={{ cursor: canSort ? 'pointer' : 'default', userSelect: 'none' }}
+                                                    aria-sort={sortDir === 'asc' ? 'ascending' : sortDir === 'desc' ? 'descending' : 'none'}
+                                                >
+                                                    {flexRender(header.column.columnDef.header, header.getContext())}
+                                                    {canSort && (
+                                                        <span style={{ marginLeft: 6, display: 'inline-flex', verticalAlign: 'middle' }}>
+                                                            {sortDir === 'asc' ? (
+                                                                <ChevronUp size={14} />
+                                                            ) : sortDir === 'desc' ? (
+                                                                <ChevronDown size={14} />
+                                                            ) : (
+                                                                <Selector size={14} style={{ opacity: 0.4 }} />
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </th>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
                             </thead>
                             <tbody>
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan="6" className="loading-cell">
+                                        <td colSpan={columns.length} className="loading-cell">
                                             <div className="loading-content">
                                                 <Clock className="loading-spinner" size={30} />
                                                 {t('kids.loadingKids', 'Loading kids...')}
                                             </div>
                                         </td>
                                     </tr>
-                                ) : filteredKids.length === 0 ? (
+                                ) : table.getRowModel().rows.length === 0 ? (
                                     <tr>
-                                        <td colSpan="6">
+                                        <td colSpan={columns.length}>
                                             <div className="empty-state">
                                                 <Baby className="empty-icon" size={60} />
                                                 <h3>{t('kids.noKidsFound', 'No kids found')}</h3>
@@ -690,118 +869,24 @@ const KidsManagementPage = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredKids.map(kid => (
-                                        <tr
-                                            key={kid.id}
-                                            className={`${kid.team === t('kids.noTeam', 'No Team') ? 'priority-row' : ''} clickable-row`}
-                                            onClick={(e) => handleRowClick(kid, e)}
-                                            style={{ cursor: 'pointer' }}
-                                            title={t('kids.clickToView', 'Click to view details')}
-                                        >
-                                            <td>
-                                                <div className="kid-info">
-                                                    <div className="kid-name">
-                                                        {kid.team === t('kids.noTeam', 'No Team') && <AlertTriangle className="priority-indicator" size={16} />}
-                                                        {kid.name}
-                                                    </div>
-                                                    <div className="parent-name">👨‍👩‍👧‍👦 {kid.parentName}</div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="kid-photo-container">
-                                                    {kid.hasPhoto ? (
-                                                        <img
-                                                            src={kid.photoUrl}
-                                                            alt={kid.name}
-                                                            className="table-kid-photo"
-                                                        />
-                                                    ) : (
-                                                        <div className="table-kid-photo-placeholder">
-                                                            {kid.initials}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td>{kid.age}</td>
-                                            <td>
-                                                <span className={`team-badge ${kid.team === t('kids.noTeam', 'No Team') ? 'no-team' : 'with-team'}`}>
-                                                    {kid.team === t('kids.noTeam', 'No Team') ? (
-                                                        <>
-                                                            <AlertTriangle size={14} style={{ marginRight: '4px' }} />
-                                                            {t('kids.noTeam', 'No Team')}
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Car size={14} style={{ marginRight: '4px' }} />
-                                                            {getTeamNameById(kid.teamId)}
-                                                        </>
-                                                    )}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span className={`status-badge status-${kid.status}`}>
-                                                    {kid.status === 'active' && <Check size={14} style={{ marginRight: '4px' }} />}
-                                                    {kid.status === 'completed' && <Check size={14} style={{ marginRight: '4px' }} />}
-                                                    {kid.status === 'cancelled' && <XCircle size={14} style={{ marginRight: '4px' }} />}
-                                                    {kid.status === 'pending' && <Clock size={14} style={{ marginRight: '4px' }} />}
-                                                    {t(`status.${kid.status}`, kid.status.charAt(0).toUpperCase() + kid.status.slice(1))}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="action-buttons-enhanced">
-                                                    <button
-                                                        className="btn-action view"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleViewKid(kid);
-                                                        }}
-                                                        title={t('kids.viewDetails', 'View Details')}
-                                                    >
-                                                        <Eye size={16} />
-                                                    </button>
-
-                                                    {(userRole === 'admin' || userRole === 'instructor') && (
-                                                        <button
-                                                            className={`btn-action ${kid.team === t('kids.noTeam', 'No Team') ? 'assign-team priority' : 'change-team'}`}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleChangeTeam(kid);
-                                                            }}
-                                                            title={kid.team === t('kids.noTeam', 'No Team') ? t('kids.assignTeam', 'Assign Team') : t('kids.changeTeam', 'Change Team')}
-                                                        >
-                                                            {kid.team === t('kids.noTeam', 'No Team') ? <Plus size={16} /> : <Car size={16} />}
-                                                        </button>
-                                                    )}
-
-                                                    {(userRole === 'admin' || userRole === 'instructor') && (
-                                                        <button
-                                                            className="btn-action edit"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleEditKid(kid);
-                                                            }}
-                                                            title={t('kids.editKid', 'Edit Kid')}
-                                                        >
-                                                            <Edit size={16} />
-                                                        </button>
-                                                    )}
-
-                                                    {userRole === 'admin' && (
-                                                        <button
-                                                            className="btn-action delete"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteKid(kid);
-                                                            }}
-                                                            title={t('kids.deleteKid', 'Delete Kid')}
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
+                                    table.getRowModel().rows.map(row => {
+                                        const kid = row.original;
+                                        return (
+                                            <tr
+                                                key={row.id}
+                                                className={`${kid.team === noTeamLabel ? 'priority-row' : ''} clickable-row`}
+                                                onClick={(e) => handleRowClick(kid, e)}
+                                                style={{ cursor: 'pointer' }}
+                                                title={t('kids.clickToView', 'Click to view details')}
+                                            >
+                                                {row.getVisibleCells().map(cell => (
+                                                    <td key={cell.id}>
+                                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>

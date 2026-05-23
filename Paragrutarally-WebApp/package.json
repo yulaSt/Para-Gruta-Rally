@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@tabler/icons-react": "^3.34.0",
+    "@tanstack/react-table": "^8.21.3",
     "brace-expansion": "^4.0.1",
     "dotenv": "^16.5.0",
     "exceljs": "^4.4.0",

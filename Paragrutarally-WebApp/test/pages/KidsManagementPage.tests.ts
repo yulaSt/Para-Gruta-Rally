@@ -208,4 +208,133 @@ export function runKidsManagementTests(setupFn: SetupFunction, options: RunKidsM
         await user.click(viewBtn);
         // Checks navigation usually.
     });
+
+    // --- Sorting tests (react-table) ---
+
+    const getRowKidNames = (table: HTMLElement): string[] => {
+        const rows = within(table).getAllByRole('row');
+        return rows
+            .slice(1) // skip header row
+            .map(row => {
+                const nameDiv = row.querySelector('.kid-name');
+                return (nameDiv?.textContent || '').trim();
+            })
+            .filter(name => name.length > 0);
+    };
+
+    test('rows are sorted by name ascending (A-Z) by default', async () => {
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
+
+        const table = screen.getByRole('table');
+        // Alphabetical: "Kid One" < "Kid Three" < "Kid Two"
+        expect(getRowKidNames(table)).toEqual(['Kid One', 'Kid Three', 'Kid Two']);
+
+        const nameHeader = within(table).getByRole('columnheader', { name: /kid info/i });
+        expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
+    });
+
+    test('clicking name column header toggles to descending (Z-A)', async () => {
+        const user = userEvent.setup({ pointerEventsCheck: 0 });
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
+
+        const table = screen.getByRole('table');
+        const nameHeader = within(table).getByRole('columnheader', { name: /kid info/i });
+
+        await user.click(nameHeader);
+
+        expect(getRowKidNames(table)).toEqual(['Kid Two', 'Kid Three', 'Kid One']);
+        expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
+    });
+
+    test('clicking team column header sorts rows by team name A-Z', async () => {
+        const user = userEvent.setup({ pointerEventsCheck: 0 });
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
+
+        const table = screen.getByRole('table');
+        const teamHeader = within(table).getByRole('columnheader', { name: /^team$/i });
+
+        await user.click(teamHeader);
+
+        // Teams A-Z: "Blue Blasters" (Kid Two), "No Team" (Kid Three), "Red Racers" (Kid One)
+        expect(getRowKidNames(table)).toEqual(['Kid Two', 'Kid Three', 'Kid One']);
+        expect(teamHeader).toHaveAttribute('aria-sort', 'ascending');
+    });
+
+    test('clicking status column header sorts rows by status A-Z', async () => {
+        const user = userEvent.setup({ pointerEventsCheck: 0 });
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
+
+        const table = screen.getByRole('table');
+        const statusHeader = within(table).getByRole('columnheader', { name: /^status$/i });
+
+        await user.click(statusHeader);
+
+        // Statuses A-Z: "active" (Kid Three), "completed" (Kid One), "pending" (Kid Two)
+        expect(getRowKidNames(table)).toEqual(['Kid Three', 'Kid One', 'Kid Two']);
+        expect(statusHeader).toHaveAttribute('aria-sort', 'ascending');
+    });
+
+    test('clicking age column header sorts numerically (youngest first)', async () => {
+        const user = userEvent.setup({ pointerEventsCheck: 0 });
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
+
+        const table = screen.getByRole('table');
+        const ageHeader = within(table).getByRole('columnheader', { name: /age/i });
+
+        await user.click(ageHeader);
+
+        // Ages calculated from DOBs in defaultKids; Kid Two (DOB 2016-05-05) is the youngest.
+        const names = getRowKidNames(table);
+        expect(names[0]).toBe('Kid Two');
+        expect(ageHeader).toHaveAttribute('aria-sort', 'ascending');
+    });
+
+    test('photo and actions column headers are not sortable', async () => {
+        const user = userEvent.setup({ pointerEventsCheck: 0 });
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
+
+        const table = screen.getByRole('table');
+        const photoHeader = within(table).getByRole('columnheader', { name: /photo/i });
+        const actionsHeader = within(table).getByRole('columnheader', { name: /actions/i });
+
+        // Capture default row order
+        const originalOrder = getRowKidNames(table);
+
+        await user.click(photoHeader);
+        expect(getRowKidNames(table)).toEqual(originalOrder);
+
+        await user.click(actionsHeader);
+        expect(getRowKidNames(table)).toEqual(originalOrder);
+
+        // Non-sortable headers report aria-sort="none"
+        expect(photoHeader).toHaveAttribute('aria-sort', 'none');
+        expect(actionsHeader).toHaveAttribute('aria-sort', 'none');
+    });
+
+    test('sort persists when combined with search filter', async () => {
+        const user = userEvent.setup({ pointerEventsCheck: 0 });
+        await setupFn({ kids: defaultKids, teams: defaultTeams });
+        await screen.findByText('Kid One');
+
+        const table = screen.getByRole('table');
+        const nameHeader = within(table).getByRole('columnheader', { name: /kid info/i });
+
+        // Switch to Z-A
+        await user.click(nameHeader);
+        expect(getRowKidNames(table)).toEqual(['Kid Two', 'Kid Three', 'Kid One']);
+
+        // Apply a search that matches multiple kids
+        const searchInput = screen.getByPlaceholderText(/search by kid name/i);
+        await user.type(searchInput, 'Kid T');
+
+        // Still Z-A within filtered results
+        expect(getRowKidNames(table)).toEqual(['Kid Two', 'Kid Three']);
+        expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
+    });
 }
