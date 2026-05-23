@@ -106,6 +106,11 @@ export const validateTeam = (data, isUpdate = false) => {
             errors.teamLeaderId = 'Team leader must be one of the assigned instructors';
         }
 
+        // Validate at most one instructor is assigned to the team
+        if (validatedData.instructorIds && validatedData.instructorIds.length > 1) {
+            errors.instructorIds = 'A team can have at most one instructor';
+        }
+
         if (Object.keys(errors).length > 0) {
             return {
                 isValid: false,

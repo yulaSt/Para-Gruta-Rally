@@ -303,8 +303,299 @@ describeWithFirestoreEmulator('TeamsManagementPage (Integration)', () => {
 
         // Expect navigation to View Page
         await screen.findByText('Team View Page');
-        
+
         // Verify in Firestore?
         // Actually, we can verify via UI if we navigated back to list, but here we navigated to view.
+    });
+
+    // --- ONE INSTRUCTOR PER TEAM + INLINE INSTRUCTOR CREATION ---
+
+    test('Add Team with inline instructor creates auth user, user doc, and team linked together', async () => {
+        const user = userEvent.setup();
+
+        // Sign in as admin and seed
+        const { signInAnonymously } = await import('firebase/auth');
+        const userCredential = await signInAnonymously(auth);
+        const uid = userCredential.user.uid;
+
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            await db.collection('users').doc(uid).set({
+                role: 'admin',
+                displayName: 'Admin User',
+                email: 'admin@test.com'
+            });
+        });
+
+        render(
+            <AuthProvider>
+                <ThemeProvider>
+                    <LanguageContext.Provider value={mockLanguageContext}>
+                        <PermissionProvider>
+                            <MemoryRouter initialEntries={['/admin/teams/add']}>
+                                <Routes>
+                                    <Route path="/admin/teams/add" element={<AddTeamPage />} />
+                                    <Route path="/admin/teams/view/:id" element={<div>Team View Page</div>} />
+                                </Routes>
+                            </MemoryRouter>
+                        </PermissionProvider>
+                    </LanguageContext.Provider>
+                </ThemeProvider>
+            </AuthProvider>
+        );
+
+        // Wait until the form is fully loaded (loadInitialData transitions
+        // isLoading false → true → false; getByRole would race against it).
+        const createNewBtn = await screen.findByRole('button', { name: /create new/i }, { timeout: 30000 });
+
+        // Fill team name
+        const nameInput = screen.getByRole('textbox', { name: /team name/i });
+        await user.type(nameInput, 'Inline Squad');
+
+        // Switch to "Create New" instructor mode
+        await user.click(createNewBtn);
+
+        // Inline instructor fields — query by stable ids since labels carry an icon child.
+        await user.type(await screen.findByPlaceholderText(/enter full name/i), 'Inline Instructor');
+        await user.type(screen.getByPlaceholderText(/enter base location/i), 'Tel Aviv');
+        const uniqueEmail = `inline-inst-${Date.now()}@test.com`;
+        await user.type(screen.getByPlaceholderText(/enter email address/i), uniqueEmail);
+        await user.type(document.getElementById('inst-password') as HTMLInputElement, 'pass123');
+        await user.type(document.getElementById('inst-phone') as HTMLInputElement, '0501234567');
+
+        // Submit
+        const createBtn = screen.getByRole('button', { name: /create racing team/i });
+        await user.click(createBtn);
+
+        // Expect navigation to view page
+        await screen.findByText('Team View Page', {}, { timeout: 15000 });
+
+        // Verify via Firestore: team exists, instructor user exists, both linked
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
+
+        const teamsSnap = await getDocs(query(collection(db, 'teams'), where('name', '==', 'Inline Squad')));
+        expect(teamsSnap.empty).toBe(false);
+        const team = teamsSnap.docs[0].data();
+        expect(Array.isArray(team.instructorIds)).toBe(true);
+        expect(team.instructorIds).toHaveLength(1);
+        const instructorUid = team.instructorIds[0];
+        expect(team.teamLeaderId).toBe(instructorUid);
+
+        // Instructor doc should exist; password should NOT be persisted in Firestore.
+        const usersSnap = await getDocs(query(collection(db, 'users'), where('email', '==', uniqueEmail)));
+        expect(usersSnap.empty).toBe(false);
+        const instructorDoc = usersSnap.docs[0];
+        expect(instructorDoc.id).toBe(instructorUid);
+        const instructorData = instructorDoc.data();
+        expect(instructorData.role).toBe('instructor');
+        expect(instructorData.name).toBe('Inline Instructor');
+        expect(instructorData.location).toBe('Tel Aviv');
+        expect(instructorData.phone).toBe('0501234567');
+        expect(instructorData.password).toBeUndefined();
+    });
+
+    test('Add Team inline instructor: missing required fields shows errors and does not create user', async () => {
+        const user = userEvent.setup();
+
+        const { signInAnonymously } = await import('firebase/auth');
+        const userCredential = await signInAnonymously(auth);
+        const uid = userCredential.user.uid;
+
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            await db.collection('users').doc(uid).set({
+                role: 'admin',
+                displayName: 'Admin User',
+                email: 'admin@test.com'
+            });
+        });
+
+        render(
+            <AuthProvider>
+                <ThemeProvider>
+                    <LanguageContext.Provider value={mockLanguageContext}>
+                        <PermissionProvider>
+                            <MemoryRouter initialEntries={['/admin/teams/add']}>
+                                <Routes>
+                                    <Route path="/admin/teams/add" element={<AddTeamPage />} />
+                                    <Route path="/admin/teams/view/:id" element={<div>Team View Page</div>} />
+                                </Routes>
+                            </MemoryRouter>
+                        </PermissionProvider>
+                    </LanguageContext.Provider>
+                </ThemeProvider>
+            </AuthProvider>
+        );
+
+        const createNewBtn = await screen.findByRole('button', { name: /create new/i }, { timeout: 30000 });
+
+        const nameInput = screen.getByRole('textbox', { name: /team name/i });
+        await user.type(nameInput, 'Should Not Persist');
+
+        await user.click(createNewBtn);
+
+        // Submit without filling inline fields — should NOT navigate
+        const createBtn = screen.getByRole('button', { name: /create racing team/i });
+        await user.click(createBtn);
+
+        // Still on Add Team page (no navigation to Team View Page)
+        expect(screen.queryByText('Team View Page')).not.toBeInTheDocument();
+
+        // Verify no team got created with this name
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
+        const teamsSnap = await getDocs(query(collection(db, 'teams'), where('name', '==', 'Should Not Persist')));
+        expect(teamsSnap.empty).toBe(true);
+    });
+
+    test('Add Team only allows one instructor selected from existing list', async () => {
+        const user = userEvent.setup();
+
+        const { signInAnonymously } = await import('firebase/auth');
+        const userCredential = await signInAnonymously(auth);
+        const uid = userCredential.user.uid;
+
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            await db.collection('users').doc(uid).set({
+                role: 'admin',
+                displayName: 'Admin User',
+                email: 'admin@test.com'
+            });
+            await db.collection('users').doc('inst-a').set({
+                displayName: 'Instructor Alpha',
+                role: 'instructor',
+                email: 'alpha@test.com',
+                location: 'North'
+            });
+            await db.collection('users').doc('inst-b').set({
+                displayName: 'Instructor Beta',
+                role: 'instructor',
+                email: 'beta@test.com',
+                location: 'South'
+            });
+        });
+
+        render(
+            <AuthProvider>
+                <ThemeProvider>
+                    <LanguageContext.Provider value={mockLanguageContext}>
+                        <PermissionProvider>
+                            <MemoryRouter initialEntries={['/admin/teams/add']}>
+                                <Routes>
+                                    <Route path="/admin/teams/add" element={<AddTeamPage />} />
+                                    <Route path="/admin/teams/view/:id" element={<div>Team View Page</div>} />
+                                </Routes>
+                            </MemoryRouter>
+                        </PermissionProvider>
+                    </LanguageContext.Provider>
+                </ThemeProvider>
+            </AuthProvider>
+        );
+
+        await screen.findByRole('button', { name: /create new/i }, { timeout: 30000 });
+        await user.type(screen.getByRole('textbox', { name: /team name/i }), 'Single Instr Team');
+
+        // Select Alpha
+        const alphaCard = (await screen.findByText('Instructor Alpha')).closest('.instructor-card') as HTMLElement;
+        await user.click(alphaCard);
+        expect(alphaCard.className).toContain('selected');
+
+        // Now select Beta — Alpha should be deselected (single-select behavior)
+        const betaCard = (await screen.findByText('Instructor Beta')).closest('.instructor-card') as HTMLElement;
+        await user.click(betaCard);
+
+        await waitFor(() => {
+            expect(betaCard.className).toContain('selected');
+            expect(alphaCard.className).not.toContain('selected');
+        });
+
+        // Submit
+        const createBtn = screen.getByRole('button', { name: /create racing team/i });
+        await user.click(createBtn);
+        await screen.findByText('Team View Page', {}, { timeout: 15000 });
+
+        // Verify Firestore: team has exactly one instructor, leader matches
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
+        const teamsSnap = await getDocs(query(collection(db, 'teams'), where('name', '==', 'Single Instr Team')));
+        expect(teamsSnap.empty).toBe(false);
+        const team = teamsSnap.docs[0].data();
+        expect(team.instructorIds).toEqual(['inst-b']);
+        expect(team.teamLeaderId).toBe('inst-b');
+    });
+
+    test('Edit Team normalizes legacy multi-instructor data to a single instructor on load', async () => {
+        const user = userEvent.setup();
+
+        const { signInAnonymously } = await import('firebase/auth');
+        const userCredential = await signInAnonymously(auth);
+        const uid = userCredential.user.uid;
+
+        const teamId = 'legacy-multi-team';
+
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            await db.collection('users').doc(uid).set({ role: 'admin', displayName: 'Admin' });
+            await db.collection('users').doc('legacy-inst-1').set({
+                displayName: 'Legacy Inst One',
+                role: 'instructor',
+                email: 'l1@test.com'
+            });
+            await db.collection('users').doc('legacy-inst-2').set({
+                displayName: 'Legacy Inst Two',
+                role: 'instructor',
+                email: 'l2@test.com'
+            });
+            // Legacy team has two instructors — the new rule allows only one.
+            await db.collection('teams').doc(teamId).set({
+                name: 'Legacy Multi Team',
+                maxCapacity: 10,
+                active: true,
+                instructorIds: ['legacy-inst-1', 'legacy-inst-2'],
+                teamLeaderId: 'legacy-inst-2',
+                kidIds: [],
+                vehicleIds: [],
+                createdAt: new Date()
+            });
+        });
+
+        render(
+            <AuthProvider>
+                <ThemeProvider>
+                    <LanguageContext.Provider value={mockLanguageContext}>
+                        <PermissionProvider>
+                            <MemoryRouter initialEntries={[`/admin/teams/edit/${teamId}`]}>
+                                <Routes>
+                                    <Route path="/admin/teams/edit/:id" element={<EditTeamPage />} />
+                                    <Route path="/admin/teams/view/:id" element={<div>Team View Page</div>} />
+                                </Routes>
+                            </MemoryRouter>
+                        </PermissionProvider>
+                    </LanguageContext.Provider>
+                </ThemeProvider>
+            </AuthProvider>
+        );
+
+        await screen.findByDisplayValue('Legacy Multi Team', {}, { timeout: 15000 });
+
+        // Only the original teamLeader (legacy-inst-2) remains selected; the other becomes unselected.
+        await waitFor(() => {
+            const twoCard = screen.getByText('Legacy Inst Two').closest('.instructor-card') as HTMLElement;
+            expect(twoCard.className).toContain('selected');
+        });
+        const oneCard = screen.getByText('Legacy Inst One').closest('.instructor-card') as HTMLElement;
+        expect(oneCard.className).not.toContain('selected');
+
+        // The normalization itself counts as a pending change — Save Updates must be enabled
+        // with no other edits, otherwise Firestore keeps the legacy multi-instructor data.
+        const saveBtn = await screen.findByRole('button', { name: /save updates/i }, { timeout: 15000 });
+        expect(saveBtn).not.toBeDisabled();
+        await user.click(saveBtn);
+        await screen.findByText('Team View Page', {}, { timeout: 15000 });
+
+        const { doc, getDoc } = await import('firebase/firestore');
+        const updated = await getDoc(doc(db, 'teams', teamId));
+        const data = updated.data() as any;
+        expect(data.instructorIds).toEqual(['legacy-inst-2']);
+        expect(data.teamLeaderId).toBe('legacy-inst-2');
     });
 });

@@ -22,6 +22,7 @@ export const createEmptyUser = () => ({
     name: '',
     phone: '',
     role: USER_ROLES.PARENT,
+    location: '',
 
     // Authentication info
     authProvider: 'email',
@@ -57,7 +58,8 @@ export const userValidationRules = {
         'displayName': 50,
         'email': 100,
         'name': 100,
-        'phone': 20
+        'phone': 20,
+        'location': 100
     },
 
     minLength: {
@@ -136,6 +138,13 @@ export const validateUser = (userData, options = {}, t) => {
         }
     });
 
+    // Validate location for instructor
+    if (userData.role === USER_ROLES.INSTRUCTOR) {
+        if (!userData.location || !userData.location.trim()) {
+            errors.location = t('users.locationRequired', 'Location is required');
+        }
+    }
+
     // Validate min lengths
     Object.entries(userValidationRules.minLength).forEach(([field, minLength]) => {
         const value = getNestedValue(userData, field);
@@ -196,7 +205,8 @@ const getFieldDisplayName = (field, t) => {
         email: t('users.email', 'Email'),
         name: t('users.fullName', 'Full Name'),
         phone: t('users.phone', 'Phone'),
-        role: t('users.role', 'Role')
+        role: t('users.role', 'Role'),
+        location: t('users.location', 'Location')
     };
 
     return fieldNames[field] || field;
@@ -224,7 +234,7 @@ export const prepareUserForFirestore = (userData, isUpdate = false) => {
     }
 
     // Trim string fields
-    const stringFields = ['displayName', 'email', 'name'];
+    const stringFields = ['displayName', 'email', 'name', 'location'];
     stringFields.forEach(field => {
         if (cleanData[field] && typeof cleanData[field] === 'string') {
             cleanData[field] = cleanData[field].trim();

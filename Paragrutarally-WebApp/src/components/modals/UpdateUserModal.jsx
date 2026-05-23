@@ -17,7 +17,8 @@ import {
     IconPhone as Phone,
     IconShield as Shield,
     IconDeviceFloppy as Save,
-    IconUserEdit as UserEdit
+    IconUserEdit as UserEdit,
+    IconMapPin as MapPin
 } from '@tabler/icons-react';
 
 const UpdateUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
@@ -26,7 +27,8 @@ const UpdateUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
         displayName: '',
         name: '',
         phone: '',
-        role: USER_ROLES.PARENT
+        role: USER_ROLES.PARENT,
+        location: ''
     });
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +41,8 @@ const UpdateUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
                 displayName: user.displayName || '',
                 name: user.name || '',
                 phone: user.phone || '',
-                role: user.role || USER_ROLES.PARENT
+                role: user.role || USER_ROLES.PARENT,
+                location: user.location || ''
             });
             setErrors({}); // Clear any previous errors
         }
@@ -65,10 +68,14 @@ const UpdateUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
 
         // Real-time validation using schema
         const fieldError = validateUserField(name, processedValue, { isUpdate: true }, t);
-        setErrors(prev => ({
-            ...prev,
-            [name]: fieldError
-        }));
+        setErrors(prev => {
+            const next = { ...prev, [name]: fieldError };
+            // Location is only required for instructor; clear any stale error when leaving that role.
+            if (name === 'role' && processedValue !== USER_ROLES.INSTRUCTOR) {
+                next.location = undefined;
+            }
+            return next;
+        });
     };
 
     const handleSubmit = async () => {
@@ -321,6 +328,32 @@ const UpdateUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
                                     </div>
                                 )}
                             </div>
+
+                            {formData.role === USER_ROLES.INSTRUCTOR && (
+                                <div className={`form-group ${errors.location ? 'error' : ''}`}>
+                                    <label htmlFor="location">
+                                        <MapPin size={16} />
+                                        {t('users.location', 'Location')} *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="location"
+                                        name="location"
+                                        value={formData.location}
+                                        onChange={handleInputChange}
+                                        disabled={isLoading}
+                                        placeholder={t('users.instructorLocationPlaceholder', 'Enter base location / branch')}
+                                        className="form-input"
+                                        aria-describedby={errors.location ? 'location-error' : undefined}
+                                        aria-invalid={!!errors.location}
+                                    />
+                                    {errors.location && (
+                                        <div id="location-error" className="error-text" role="alert">
+                                            {errors.location}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

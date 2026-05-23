@@ -99,6 +99,7 @@ describe('CreateUserModal', () => {
     await user.type(screen.getByLabelText(/Email Address/i), 'test@example.com');
     await user.type(screen.getByLabelText(/Phone Number/i), '0501234567');
     await user.selectOptions(screen.getByLabelText(/Role/i), USER_ROLES.INSTRUCTOR);
+    await user.type(await screen.findByLabelText(/Location/i), 'Tel Aviv');
 
     await user.click(screen.getByRole('button', { name: /Create User/i }));
 
@@ -123,6 +124,7 @@ describe('CreateUserModal', () => {
     await user.type(screen.getByLabelText(/Email Address/i), 'test@example.com');
     await user.type(screen.getByLabelText(/Phone Number/i), '0501234567');
     await user.selectOptions(screen.getByLabelText(/Role/i), USER_ROLES.INSTRUCTOR);
+    await user.type(await screen.findByLabelText(/Location/i), 'Tel Aviv');
 
     await user.click(screen.getByRole('button', { name: /Create User/i }));
 

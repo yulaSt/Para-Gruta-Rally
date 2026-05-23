@@ -9,6 +9,11 @@ import {addTeam, getAllInstructors} from '@/services/teamService.js';
 import {getAllKids} from '@/services/kidService.js';
 import {getAvailableVehicles} from '@/services/vehicleService.js'; // NEW: Import for vehicles
 import {createEmptyTeam, validateTeam} from '@/schemas/teamSchema.js';
+import { createUserWithEmailAndPassword, connectAuthEmulator, getAuth, deleteUser } from 'firebase/auth';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { db } from '@/firebase/config.js';
+import { validateUser, prepareUserForFirestore, cleanPhoneNumber } from '@/schemas/userSchema.js';
 import {
     IconUsers as UsersGroup,
     IconPlus as Plus,
@@ -24,7 +29,12 @@ import {
     IconSparkles as Sparkles,
     IconTrophy as Trophy,
     IconTarget as Target,
-    IconSettings as Settings // NEW: Import for vehicle section
+    IconSettings as Settings,
+    IconUserPlus as UserPlus,
+    IconMail as Mail,
+    IconPhone as Phone,
+    IconKey as Key,
+    IconMapPin as MapPin
 } from '@tabler/icons-react';
 import './AddTeamPage.css';
 
@@ -34,7 +44,9 @@ const AddTeamPage = () => {
     const {permissions, userRole} = usePermissions();
     const { t, isHebrew, isRTL } = useLanguage();
 
-    const [isLoading, setIsLoading] = useState(false);
+    // Default to true so the form doesn't flash before the initial data load — otherwise
+    // queries that await the form race against the loadInitialData re-render.
+    const [isLoading, setIsLoading] = useState(true);
     const [instructors, setInstructors] = useState([]);
     const [availableKids, setAvailableKids] = useState([]);
     const [availableVehicles, setAvailableVehicles] = useState([]); // NEW: Available vehicles
@@ -42,6 +54,36 @@ const AddTeamPage = () => {
     const [errors, setErrors] = useState({});
     const [fieldErrors, setFieldErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Inline instructor state
+    const emptyInlineInstructor = {
+        name: '',
+        location: '',
+        email: '',
+        password: '',
+        phone: '',
+        role: 'instructor',
+        displayName: '',
+        authProvider: 'email'
+    };
+    const [isAddingInlineInstructor, setIsAddingInlineInstructor] = useState(false);
+    const [inlineInstructor, setInlineInstructor] = useState(emptyInlineInstructor);
+    const [inlineErrors, setInlineErrors] = useState({});
+
+    const switchToExistingInstructorMode = () => {
+        setIsAddingInlineInstructor(false);
+        setInlineInstructor(emptyInlineInstructor);
+        setInlineErrors({});
+    };
+
+    const switchToInlineInstructorMode = () => {
+        setIsAddingInlineInstructor(true);
+        setFormData(prev => ({
+            ...prev,
+            instructorIds: [],
+            teamLeaderId: ''
+        }));
+    };
 
     useEffect(() => {
         loadInitialData();
@@ -94,12 +136,45 @@ const AddTeamPage = () => {
     };
 
     const handleInstructorToggle = (instructorId) => {
-        setFormData(prev => ({
-            ...prev,
-            instructorIds: prev.instructorIds.includes(instructorId)
-                ? prev.instructorIds.filter(id => id !== instructorId)
-                : [...prev.instructorIds, instructorId]
-        }));
+        setFormData(prev => {
+            const isAlreadySelected = prev.instructorIds.includes(instructorId);
+            const newInstructorIds = isAlreadySelected ? [] : [instructorId];
+            return {
+                ...prev,
+                instructorIds: newInstructorIds,
+                teamLeaderId: isAlreadySelected ? '' : instructorId
+            };
+        });
+    };
+
+    const handleInlineInputChange = (e) => {
+        const { name, value } = e.target;
+        let processedValue = value;
+
+        if (name === 'phone') {
+            processedValue = cleanPhoneNumber(value);
+            if (processedValue.length > 10) {
+                processedValue = processedValue.slice(0, 10);
+            }
+        }
+
+        setInlineInstructor(prev => {
+            const updated = {
+                ...prev,
+                [name]: processedValue
+            };
+            if (name === 'name') {
+                updated.displayName = processedValue;
+            }
+            return updated;
+        });
+
+        if (inlineErrors[name]) {
+            setInlineErrors(prev => ({
+                ...prev,
+                [name]: undefined
+            }));
+        }
     };
 
     const handleKidToggle = (kidId) => {
@@ -146,39 +221,169 @@ const AddTeamPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!validateForm()) {
+        let targetInstructorIds = formData.instructorIds;
+        let targetTeamLeaderId = formData.teamLeaderId;
+
+        if (isAddingInlineInstructor) {
+            // Validate inline instructor form
+            const instValidation = validateUser(inlineInstructor, { isUpdate: false }, t);
+            if (!inlineInstructor.password) {
+                instValidation.isValid = false;
+                instValidation.errors.password = t('users.passwordRequired', 'Password is required');
+            } else if (inlineInstructor.password.length < 6) {
+                instValidation.isValid = false;
+                instValidation.errors.password = t('users.passwordTooShort', 'Password must be at least 6 characters');
+            }
+
+            if (!instValidation.isValid) {
+                setInlineErrors(instValidation.errors);
+                const firstError = Object.values(instValidation.errors)[0];
+                setErrors({ general: `${t('addTeam.pleaseFixInstructorErrors', 'Please fix instructor errors:')} ${firstError}` });
+                return;
+            }
+
+            // Temporarily use a mock ID so validateTeam doesn't fail instructor assignments
+            targetInstructorIds = ['dummy-instructor-id'];
+            targetTeamLeaderId = 'dummy-instructor-id';
+        }
+
+        // Validate the team form
+        const teamValidation = validateTeam({
+            ...formData,
+            instructorIds: targetInstructorIds,
+            teamLeaderId: targetTeamLeaderId
+        }, false);
+
+        if (!teamValidation.isValid) {
+            setErrors(teamValidation.errors);
+            const newFieldErrors = {};
+            Object.keys(teamValidation.errors).forEach(field => {
+                newFieldErrors[field] = true;
+            });
+            setFieldErrors(newFieldErrors);
             return;
         }
 
         setIsSubmitting(true);
+        let createdInstructorUid = null;
+        let secondaryAppInstance = null;
+        let createdAuthUser = null;
+        let instructorDocCreated = false;
+
         try {
-            const teamId = await addTeam(formData);
-            // Update kids' team assignments to maintain a bidirectional relationship
+            if (isAddingInlineInstructor) {
+                // Register the instructor
+                const firebaseConfig = {
+                    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+                    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+                    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+                    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+                    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+                    appId: import.meta.env.VITE_FIREBASE_APP_ID
+                };
+
+                const timestamp = Date.now();
+                secondaryAppInstance = initializeApp(firebaseConfig, `CreateInstructor_${timestamp}`);
+                const secondaryAuth = getAuth(secondaryAppInstance);
+
+                const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ||
+                    (typeof process !== 'undefined' && process.env?.VITE_USE_FIREBASE_EMULATORS === 'true');
+                if (useEmulators) {
+                    connectAuthEmulator(secondaryAuth, 'http://127.0.0.1:9099');
+                }
+
+                const userCredential = await createUserWithEmailAndPassword(
+                    secondaryAuth,
+                    inlineInstructor.email,
+                    inlineInstructor.password
+                );
+
+                createdAuthUser = userCredential.user;
+                createdInstructorUid = createdAuthUser.uid;
+
+                // Save instructor to Firestore 'users' collection.
+                // Strip password before persisting — Firebase Auth holds the credential; never store it in Firestore.
+                const { password: _instructorPassword, ...instructorWithoutPassword } = inlineInstructor;
+                const userDoc = prepareUserForFirestore(instructorWithoutPassword, false);
+                await setDoc(doc(db, 'users', createdInstructorUid), userDoc);
+                instructorDocCreated = true;
+            }
+
+            // Now prepare final team data
+            const finalInstructorIds = isAddingInlineInstructor ? [createdInstructorUid] : formData.instructorIds;
+            const finalTeamLeaderId = isAddingInlineInstructor ? createdInstructorUid : formData.teamLeaderId;
+
+            const finalTeamData = {
+                ...formData,
+                instructorIds: finalInstructorIds,
+                teamLeaderId: finalTeamLeaderId
+            };
+
+            const teamId = await addTeam(finalTeamData);
+
+            // Team created — instructor (if any) is committed. Release the secondary app.
+            if (secondaryAppInstance) {
+                try {
+                    await deleteApp(secondaryAppInstance);
+                } catch (err) {
+                    console.warn('Error during app cleanup:', err);
+                }
+                secondaryAppInstance = null;
+            }
+
+            // Update kids' team assignments
             if (formData.kidIds && formData.kidIds.length > 0) {
                 try {
                     const { updateKidTeamAssignment } = await import('@/services/kidService.js');
-
-                    // Update each selected kid's teamId
                     const kidUpdatePromises = formData.kidIds.map(kidId =>
                         updateKidTeamAssignment(kidId, teamId)
                     );
-
                     await Promise.all(kidUpdatePromises);
                 } catch (kidError) {
                     console.warn('⚠️ Failed to update some kid assignments:', kidError);
-                    // Don't fail the entire operation since a team was created successfully
                 }
             }
-            // Navigate to the new team's view page with a success message
+
             navigate(`/admin/teams/view/${teamId}`, {
                 state: {
                     message: t('addTeam.teamCreatedSuccess', 'Team "{teamName}" is ready for action! Let the racing begin! 🏎️', { teamName: formData.name }),
                     type: 'success'
                 }
             });
+
         } catch (error) {
-            console.error('❌ Error adding team:', error);
-            setErrors({general: t('addTeam.failedToAddTeam', 'Failed to add team. Please try again.')});
+            console.error('❌ Error submitting team:', error);
+
+            // Roll back instructor creation if team save failed afterwards.
+            if (createdAuthUser) {
+                try {
+                    await deleteUser(createdAuthUser);
+                } catch (rollbackAuthErr) {
+                    console.warn('⚠️ Could not roll back Auth user — orphaned UID:', createdInstructorUid, rollbackAuthErr);
+                }
+            }
+            if (instructorDocCreated && createdInstructorUid) {
+                try {
+                    await deleteDoc(doc(db, 'users', createdInstructorUid));
+                } catch (rollbackDocErr) {
+                    console.warn('⚠️ Could not roll back Firestore user doc:', createdInstructorUid, rollbackDocErr);
+                }
+            }
+
+            if (secondaryAppInstance) {
+                try {
+                    await deleteApp(secondaryAppInstance);
+                } catch (err) {
+                    console.warn('Error during app cleanup:', err);
+                }
+            }
+
+            if (error.code === 'auth/email-already-in-use') {
+                setInlineErrors(prev => ({ ...prev, email: t('users.emailInUse', 'This email is already registered') }));
+                setErrors({ general: t('users.emailInUse', 'This email is already registered') });
+            } else {
+                setErrors({ general: error.message || t('addTeam.failedToAddTeam', 'Failed to add team. Please try again.') });
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -356,66 +561,165 @@ const AddTeamPage = () => {
                                 <User className="section-icon" size={24}/>
                                 <h2>👨‍🏫 {t('teams.racingInstructors', 'Racing Instructors')}</h2>
                             </div>
-                            <div className="instructors-grid">
-                                {instructors.length === 0 ? (
-                                    <div className="empty-state">
-                                        <User className="empty-icon" size={40}/>
-                                        <p>{t('teams.noInstructorsAvailable', 'No instructors available. Add some instructors first!')}</p>
-                                    </div>
-                                ) : (
-                                    instructors.map(instructor => (
-                                        <div
-                                            key={instructor.id}
-                                            className={`instructor-card card selectable ${formData.instructorIds.includes(instructor.id) ? 'selected' : ''}`}
-                                            onClick={() => handleInstructorToggle(instructor.id)}
-                                        >
-                                            <div className="card-header">
-                                                <User className="card-icon" size={20}/>
-                                                <span className="instructor-name card-title">
-                                                    {getInstructorDisplayName(instructor)}
-                                                </span>
-                                                {formData.instructorIds.includes(instructor.id) && (
-                                                    <Check className="selected-icon" size={16}/>
-                                                )}
-                                            </div>
-                                            <div className="instructor-details card-body">
-                                                {instructor.email && (
-                                                    <div>📧 {instructor.email}</div>
-                                                )}
-                                                {instructor.phone && (
-                                                    <div>📱 {instructor.phone}</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
+
+                            <div className="instructor-mode-selector">
+                                <button
+                                    type="button"
+                                    className={`mode-btn ${!isAddingInlineInstructor ? 'active' : ''}`}
+                                    onClick={switchToExistingInstructorMode}
+                                >
+                                    <User size={16} />
+                                    {t('teams.selectExistingInstructor', 'Select Existing')}
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`mode-btn ${isAddingInlineInstructor ? 'active' : ''}`}
+                                    onClick={switchToInlineInstructorMode}
+                                >
+                                    <UserPlus size={16} />
+                                    {t('teams.addNewInstructorInline', 'Create New')}
+                                </button>
                             </div>
 
-                            {formData.instructorIds.length > 0 && (
-                                <div className="team-leader-section">
-                                    <div className="field-wrapper">
-                                        <label className="form-label">
-                                            <Trophy className="label-icon" size={16}/>
-                                            {t('teams.teamLeader', 'Team Leader')}
-                                        </label>
-                                        <select
-                                            value={formData.teamLeaderId}
-                                            onChange={(e) => handleInputChange('teamLeaderId', e.target.value)}
-                                            className="form-select"
-                                        >
-                                            <option value="">🎯 {t('teams.chooseTeamLeader', 'Choose Team Leader')}</option>
-                                            {formData.instructorIds.map(instructorId => {
-                                                const instructor = instructors.find(i => i.id === instructorId);
-                                                return instructor ? (
-                                                    <option key={instructorId} value={instructorId}>
-                                                        👑 {getInstructorDisplayName(instructor)}
-                                                    </option>
-                                                ) : null;
-                                            })}
-                                        </select>
-                                        <small className="field-hint">
-                                            {t('addTeam.teamLeaderHint', 'The team leader will be the main instructor responsible for this team.')}
-                                        </small>
+                            {!isAddingInlineInstructor ? (
+                                <>
+                                    <div className="instructors-grid">
+                                        {instructors.length === 0 ? (
+                                            <div className="empty-state">
+                                                <User className="empty-icon" size={40}/>
+                                                <p>{t('teams.noInstructorsAvailable', 'No instructors available. Add some instructors first!')}</p>
+                                            </div>
+                                        ) : (
+                                            instructors.map(instructor => (
+                                                <div
+                                                    key={instructor.id}
+                                                    className={`instructor-card card selectable ${formData.instructorIds.includes(instructor.id) ? 'selected' : ''}`}
+                                                    onClick={() => handleInstructorToggle(instructor.id)}
+                                                >
+                                                    <div className="card-header">
+                                                        <User className="card-icon" size={20}/>
+                                                        <span className="instructor-name card-title">
+                                                            {getInstructorDisplayName(instructor)}
+                                                        </span>
+                                                        {formData.instructorIds.includes(instructor.id) && (
+                                                            <Check className="selected-icon" size={16}/>
+                                                        )}
+                                                    </div>
+                                                    <div className="instructor-details card-body">
+                                                        {instructor.email && (
+                                                            <div>📧 {instructor.email}</div>
+                                                        )}
+                                                        {instructor.phone && (
+                                                            <div>📱 {instructor.phone}</div>
+                                                        )}
+                                                        {instructor.location && (
+                                                            <div>📍 {instructor.location}</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+
+                                </>
+                            ) : (
+                                <div className="inline-instructor-form">
+                                    <div className="form-grid">
+                                        <div className="form-group">
+                                            <div className="field-wrapper">
+                                                <label className="form-label" htmlFor="inst-name">
+                                                    <User className="label-icon" size={16}/>
+                                                    {t('users.fullName', 'Full Name')} *
+                                                </label>
+                                                <input
+                                                    id="inst-name"
+                                                    type="text"
+                                                    name="name"
+                                                    value={inlineInstructor.name}
+                                                    onChange={handleInlineInputChange}
+                                                    placeholder={t('users.fullNamePlaceholder', 'Enter full name')}
+                                                    className={`form-input ${inlineErrors.name ? 'error' : ''}`}
+                                                />
+                                                {inlineErrors.name && <span className="error-text">{inlineErrors.name}</span>}
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <div className="field-wrapper">
+                                                <label className="form-label" htmlFor="inst-location">
+                                                    <MapPin className="label-icon" size={16}/>
+                                                    {t('users.location', 'Location')} *
+                                                </label>
+                                                <input
+                                                    id="inst-location"
+                                                    type="text"
+                                                    name="location"
+                                                    value={inlineInstructor.location}
+                                                    onChange={handleInlineInputChange}
+                                                    placeholder={t('users.instructorLocationPlaceholder', 'Enter base location / branch')}
+                                                    className={`form-input ${inlineErrors.location ? 'error' : ''}`}
+                                                />
+                                                {inlineErrors.location && <span className="error-text">{inlineErrors.location}</span>}
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <div className="field-wrapper">
+                                                <label className="form-label" htmlFor="inst-email">
+                                                    <Mail className="label-icon" size={16}/>
+                                                    {t('users.emailAddress', 'Email Address')} *
+                                                </label>
+                                                <input
+                                                    id="inst-email"
+                                                    type="email"
+                                                    name="email"
+                                                    value={inlineInstructor.email}
+                                                    onChange={handleInlineInputChange}
+                                                    placeholder={t('users.emailPlaceholder', 'Enter email address')}
+                                                    className={`form-input ${inlineErrors.email ? 'error' : ''}`}
+                                                />
+                                                {inlineErrors.email && <span className="error-text">{inlineErrors.email}</span>}
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <div className="field-wrapper">
+                                                <label className="form-label" htmlFor="inst-password">
+                                                    <Key className="label-icon" size={16}/>
+                                                    {t('users.password', 'Password')} *
+                                                </label>
+                                                <input
+                                                    id="inst-password"
+                                                    type="password"
+                                                    name="password"
+                                                    value={inlineInstructor.password}
+                                                    onChange={handleInlineInputChange}
+                                                    placeholder="••••••"
+                                                    className={`form-input ${inlineErrors.password ? 'error' : ''}`}
+                                                />
+                                                {inlineErrors.password && <span className="error-text">{inlineErrors.password}</span>}
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <div className="field-wrapper">
+                                                <label className="form-label" htmlFor="inst-phone">
+                                                    <Phone className="label-icon" size={16}/>
+                                                    {t('users.phoneNumber', 'Phone Number')} *
+                                                </label>
+                                                <input
+                                                    id="inst-phone"
+                                                    type="tel"
+                                                    name="phone"
+                                                    value={inlineInstructor.phone}
+                                                    onChange={handleInlineInputChange}
+                                                    placeholder="05XXXXXXXX"
+                                                    maxLength="10"
+                                                    className={`form-input ${inlineErrors.phone ? 'error' : ''}`}
+                                                />
+                                                {inlineErrors.phone && <span className="error-text">{inlineErrors.phone}</span>}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}

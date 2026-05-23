@@ -21,7 +21,8 @@ import {
     IconShield as Shield,
     IconDeviceFloppy as Save,
     IconUserPlus as UserPlus,
-    IconKey as Key
+    IconKey as Key,
+    IconMapPin as MapPin
 } from '@tabler/icons-react';
 
 
@@ -54,10 +55,15 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
 
         // Real-time validation using schema
         const fieldError = validateUserField(name, processedValue, { isUpdate: false }, t);
-        setErrors(prev => ({
-            ...prev,
-            [name]: fieldError
-        }));
+        setErrors(prev => {
+            const next = { ...prev, [name]: fieldError };
+            // Location is only required for instructor; clear any stale error when leaving that role
+            // so the now-hidden field doesn't keep the Create button disabled via hasFormErrors.
+            if (name === 'role' && processedValue !== USER_ROLES.INSTRUCTOR) {
+                next.location = undefined;
+            }
+            return next;
+        });
     };
 
     const handleSubmit = async () => {
@@ -415,6 +421,32 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
                                     {t('users.roleHint', 'Select the appropriate role for this user')}
                                 </small>
                             </div>
+
+                            {formData.role === USER_ROLES.INSTRUCTOR && (
+                                <div className={`form-group ${errors.location ? 'error' : ''}`}>
+                                    <label htmlFor="location">
+                                        <MapPin size={16} />
+                                        {t('users.location', 'Location')} *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="location"
+                                        name="location"
+                                        value={formData.location}
+                                        onChange={handleInputChange}
+                                        disabled={isLoading}
+                                        placeholder={t('users.instructorLocationPlaceholder', 'Enter base location / branch')}
+                                        className="form-input"
+                                        aria-describedby={errors.location ? 'location-error' : undefined}
+                                        aria-invalid={!!errors.location}
+                                    />
+                                    {errors.location && (
+                                        <div id="location-error" className="error-text" role="alert">
+                                            {errors.location}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

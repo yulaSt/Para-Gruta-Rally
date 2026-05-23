@@ -116,8 +116,29 @@ const EditTeamPage = () => {
                 return;
             }
 
+            // Enforce single-instructor rule on edit: if legacy data has multiple
+            // instructors, keep the one already designated as team leader (or the first).
+            // Keep originalData as the raw loaded team so hasChanges() flags the normalization
+            // as dirty — otherwise the save button stays disabled and Firestore keeps the legacy data.
+            const loadedInstructorIds = Array.isArray(teamData.instructorIds) ? teamData.instructorIds : [];
+            let normalizedInstructorIds = loadedInstructorIds;
+            let normalizedTeamLeaderId = teamData.teamLeaderId || '';
+            if (loadedInstructorIds.length > 1) {
+                const preferred = loadedInstructorIds.includes(teamData.teamLeaderId)
+                    ? teamData.teamLeaderId
+                    : loadedInstructorIds[0];
+                normalizedInstructorIds = [preferred];
+                normalizedTeamLeaderId = preferred;
+            } else if (loadedInstructorIds.length === 1) {
+                normalizedTeamLeaderId = loadedInstructorIds[0];
+            }
+
             setOriginalData(teamData);
-            setFormData(teamData);
+            setFormData({
+                ...teamData,
+                instructorIds: normalizedInstructorIds,
+                teamLeaderId: normalizedTeamLeaderId
+            });
 
             // Load supporting data including all teams and vehicles
             const [instructorsData, allKidsData, allTeamsData, allVehiclesData] = await Promise.all([
@@ -168,12 +189,15 @@ const EditTeamPage = () => {
     };
 
     const handleInstructorToggle = (instructorId) => {
-        setFormData(prev => ({
-            ...prev,
-            instructorIds: prev.instructorIds.includes(instructorId)
-                ? prev.instructorIds.filter(id => id !== instructorId)
-                : [...prev.instructorIds, instructorId]
-        }));
+        setFormData(prev => {
+            const isAlreadySelected = prev.instructorIds.includes(instructorId);
+            const newInstructorIds = isAlreadySelected ? [] : [instructorId];
+            return {
+                ...prev,
+                instructorIds: newInstructorIds,
+                teamLeaderId: isAlreadySelected ? '' : instructorId
+            };
+        });
     };
 
     const handleKidToggle = (kidId) => {
