@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.jsx - FIXED WITH PROPER ROLE LOGIC
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
@@ -10,7 +10,8 @@ import {
     signInWithPopup
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '../firebase/config';
 
 // Create the authentication context
 const AuthContext = createContext();
@@ -88,6 +89,10 @@ export function AuthProvider({ children }) {
     const [error, setError] = useState(null);
     const [authInitialized, setAuthInitialized] = useState(false);
 
+    // Tracks an in-flight completeGoogleSignIn callable so the auth-state handler
+    // doesn't sign a user out before their users/{uid} profile is finalized.
+    const googleFinalizationRef = useRef(null);
+
     // Function to create or update user document in Firestore
     async function createUserDocument(user, additionalData = {}) {
         if (!user) return;
@@ -123,17 +128,36 @@ export function AuthProvider({ children }) {
 
     // Enhanced login function with role detection
     async function signIn(email, password) {
+        let signedInUser = null;
+
         try {
             setError(null);
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            signedInUser = userCredential.user;
 
-            // Update last login timestamp
-            const userRef = doc(db, 'users', userCredential.user.uid);
-            await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+            // Update last login timestamp. This is best-effort and intentionally
+            // does not touch updatedAt; lastLogin is auth activity, not a profile edit.
+            try {
+                const userRef = doc(db, 'users', userCredential.user.uid);
+                await setDoc(
+                    userRef,
+                    { lastLogin: serverTimestamp() },
+                    { merge: true }
+                );
+            } catch (lastLoginError) {
+                console.warn('Could not update lastLogin after sign-in:', lastLoginError);
+            }
 
             return userCredential;
         } catch (error) {
             console.error("Login error:", error);
+            if (signedInUser && auth.currentUser?.uid === signedInUser.uid) {
+                try {
+                    await signOut(auth);
+                } catch (signOutError) {
+                    console.warn('Could not sign out after failed login:', signOutError);
+                }
+            }
             setError(error.message);
             throw error;
         }
@@ -141,39 +165,35 @@ export function AuthProvider({ children }) {
 
     // Enhanced Google sign-in with role verification
     async function signInWithGoogle() {
+        let signedInUser = null;
+
         try {
             setError(null);
             const provider = new GoogleAuthProvider();
             const userCredential = await signInWithPopup(auth, provider);
-            const user = userCredential.user;
+            signedInUser = userCredential.user;
 
-            // Check if email exists in authorized users
-            const usersRef = collection(db, 'users');
-            const emailQuery = query(usersRef, where('email', '==', user.email));
-            const emailQuerySnapshot = await getDocs(emailQuery);
-
-            if (emailQuerySnapshot.empty) {
-                // Email not found in authorized users
-                await signOut(auth);
-                throw new Error('This email is not authorized to access this application. Please contact an administrator.');
-            }
-
-            // Email exists, update user document
-            const existingUserDoc = emailQuerySnapshot.docs[0];
-            const existingUserId = existingUserDoc.id;
-
-            // Update the existing user document with Google auth info
-            const userRef = doc(db, 'users', existingUserId);
-            await setDoc(userRef, {
-                lastLogin: serverTimestamp(),
-                authProvider: 'google',
-                ...(user.displayName ? { displayName: user.displayName } : {}),
-                ...(user.photoURL ? { photoURL: user.photoURL } : {})
-            }, { merge: true });
+            const completeGoogleSignIn = httpsCallable(functions, 'completeGoogleSignIn');
+            // Publish the in-flight finalization (set synchronously, before awaiting)
+            // so the auth-state handler that fires on sign-in can wait for the
+            // users/{uid} profile to be created instead of signing the user out.
+            const finalizationPromise = completeGoogleSignIn();
+            googleFinalizationRef.current = {
+                uid: signedInUser.uid,
+                promise: finalizationPromise
+            };
+            await finalizationPromise;
 
             return userCredential;
         } catch (error) {
             console.error("Google sign-in error:", error);
+            if (signedInUser && auth.currentUser?.uid === signedInUser.uid) {
+                try {
+                    await signOut(auth);
+                } catch (signOutError) {
+                    console.warn('Could not sign out after failed Google login:', signOutError);
+                }
+            }
             setError(error.message);
             throw error;
         }
@@ -342,6 +362,29 @@ export function AuthProvider({ children }) {
                     }
                 }
 
+                // First Google sign-in: the completeGoogleSignIn callable may still be
+                // creating users/{uid} (cold starts can exceed the read-retry window).
+                // Wait for it to finish before concluding the profile is missing, so an
+                // authorized Google user isn't signed out mid-finalization.
+                if (!firestoreData) {
+                    const pendingFinalization = googleFinalizationRef.current;
+                    if (pendingFinalization && pendingFinalization.uid === user.uid) {
+                        try {
+                            await pendingFinalization.promise;
+                        } catch (finalizationError) {
+                            console.warn('Google sign-in finalization failed:', finalizationError);
+                        } finally {
+                            googleFinalizationRef.current = null;
+                        }
+
+                        const finalizedDocResult = await retryFirestoreRead(userRef, 3, 1000);
+                        if (finalizedDocResult.exists) {
+                            firestoreData = finalizedDocResult.data;
+                            actualDocId = user.uid;
+                        }
+                    }
+                }
+
                 // If we found user data, process it
                 if (firestoreData) {
 
@@ -419,27 +462,11 @@ export function AuthProvider({ children }) {
                     setLoading(false);
                     setAuthInitialized(true);
                 } else {
-                    // No user found in database after retries - create with default role
-
-                    const defaultUserData = await createUserDocument(user, {
-                        role: 'host'
-                    });
-
-                    // Wait for document creation to propagate
-                    await delay(1000);
-
-                    const userRole = defaultUserData.role;
-                    const enhancedUser = {
-                        ...user,
-                        ...defaultUserData,
-                        role: userRole
-                    };
-
-                    setCurrentUser(enhancedUser);
-                    setUserData(defaultUserData);
-                    setUserRole(userRole);
-                    setError(null);
-
+                    await signOut(auth);
+                    setCurrentUser(null);
+                    setUserData(null);
+                    setUserRole(null);
+                    setError('User profile not found. Please contact an administrator.');
                     setLoading(false);
                     setAuthInitialized(true);
                 }

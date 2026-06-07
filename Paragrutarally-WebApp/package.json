@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:users": "node scripts/seed-users.mjs",
+    "audit:auth-users": "node scripts/audit-auth-users.mjs",
+    "repair:auth-user": "node scripts/repair-auth-user.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run unit.spec",

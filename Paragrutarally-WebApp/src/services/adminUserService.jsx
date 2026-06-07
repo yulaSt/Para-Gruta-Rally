@@ -24,10 +24,12 @@ export const createUserAsAdmin = async (userData) => {
             const now = serverTimestamp();
 
             // Create user document in Firestore
+            const normalizedEmail = userData.email.trim().toLowerCase();
             const userDoc = {
                 createdAt: now,
                 displayName: userData.displayName,
-                email: userData.email,
+                email: normalizedEmail,
+                emailLower: normalizedEmail,
                 lastLogin: now,
                 name: userData.name,
                 phone: userData.phone,

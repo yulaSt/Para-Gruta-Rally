@@ -244,6 +244,7 @@ export const prepareUserForFirestore = (userData, isUpdate = false) => {
     // Ensure email is lowercase
     if (cleanData.email) {
         cleanData.email = cleanData.email.toLowerCase();
+        cleanData.emailLower = cleanData.email;
     }
 
     // Clean up empty strings and null values

@@ -4,7 +4,7 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 // Set global options for 2nd gen functions
 setGlobalOptions({
@@ -17,6 +17,49 @@ initializeApp();
 
 const auth = getAuth();
 const firestore = getFirestore();
+const usersCollection = firestore.collection('users');
+
+const APP_ROLES = new Set(['admin', 'instructor', 'parent', 'host']);
+
+function normalizeEmail(email) {
+    return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
+async function findUserProfileByEmail(email) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) return null;
+
+    const candidateQueries = [
+        usersCollection.where('emailLower', '==', normalizedEmail).limit(1),
+        usersCollection.where('email', '==', normalizedEmail).limit(1),
+        usersCollection.where('email', '==', email.trim()).limit(1)
+    ];
+
+    for (const candidateQuery of candidateQueries) {
+        const snapshot = await candidateQuery.get();
+        if (!snapshot.empty) {
+            return snapshot.docs[0];
+        }
+    }
+
+    return null;
+}
+
+function normalizeRole(role) {
+    const normalizedRole = typeof role === 'string' ? role.trim() : '';
+    return APP_ROLES.has(normalizedRole) ? normalizedRole : null;
+}
+
+function publicProfileFromDoc(doc, data) {
+    return {
+        id: doc.id,
+        displayName: data.displayName || '',
+        email: data.email || '',
+        name: data.name || '',
+        phone: data.phone || '',
+        role: data.role
+    };
+}
 
 /**
  * Sync role stored in Firestore `users/{uid}.role` into an Auth custom claim `role`.
@@ -27,7 +70,7 @@ export const syncUserRoleClaim = onDocumentWritten('users/{userId}', async (even
     const after = event.data?.after;
     const role = after?.exists ? after.data()?.role : null;
 
-    const allowedRoles = new Set(['admin', 'staff', 'instructor', 'parent', 'guest']);
+    const allowedRoles = new Set(['admin', 'staff', 'instructor', 'parent', 'host', 'guest']);
     const normalizedRole = typeof role === 'string' && allowedRoles.has(role) ? role : null;
 
     try {
@@ -50,6 +93,163 @@ export const syncUserRoleClaim = onDocumentWritten('users/{userId}', async (even
         throw error;
     }
 });
+
+/**
+ * Finalize Google sign-in after Firebase Auth has created/reused the account.
+ * Unknown emails are removed from Auth so they do not become invisible orphan users.
+ */
+export const completeGoogleSignIn = onCall(
+    {
+        timeoutSeconds: 60,
+        memory: '256MiB'
+    },
+    async (request) => {
+        if (!request.auth) {
+            throw new HttpsError(
+                'unauthenticated',
+                'User must be authenticated.'
+            );
+        }
+
+        const userId = request.auth.uid;
+        const authUser = await auth.getUser(userId);
+        const normalizedEmail = normalizeEmail(authUser.email);
+
+        // Only a verified Google identity may be linked to an existing profile by
+        // email. Without this guard, anyone who can self-register an Auth account
+        // with an arbitrary (unverified) email could claim another user's profile
+        // and role (privilege escalation / account takeover).
+        const isGoogleProvider = authUser.providerData.some(
+            (provider) => provider.providerId === 'google.com'
+        );
+        if (!isGoogleProvider || !authUser.emailVerified) {
+            throw new HttpsError(
+                'permission-denied',
+                'A verified Google sign-in is required to access this application.'
+            );
+        }
+
+        if (!normalizedEmail) {
+            await auth.deleteUser(userId);
+            throw new HttpsError(
+                'permission-denied',
+                'This account has no email address. Please contact an administrator.'
+            );
+        }
+
+        const userRef = usersCollection.doc(userId);
+        let userDoc = await userRef.get();
+        let userData = userDoc.exists ? userDoc.data() : null;
+        let sourceUserDocId = null;
+
+        if (!userDoc.exists) {
+            const emailMatchedDoc = await findUserProfileByEmail(authUser.email);
+
+            if (!emailMatchedDoc) {
+                await auth.deleteUser(userId);
+                throw new HttpsError(
+                    'permission-denied',
+                    'This email is not authorized to access this application. Please contact an administrator.'
+                );
+            }
+
+            sourceUserDocId = emailMatchedDoc.id;
+            userData = emailMatchedDoc.data();
+            userDoc = emailMatchedDoc;
+        }
+
+        const role = normalizeRole(userData?.role);
+        if (!role) {
+            throw new HttpsError(
+                'failed-precondition',
+                'User profile is missing a valid role. Please contact an administrator.'
+            );
+        }
+
+        const profileUpdate = {
+            ...userData,
+            email: normalizedEmail,
+            emailLower: normalizedEmail,
+            role,
+            authProvider: 'google',
+            lastLogin: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            ...(authUser.displayName ? { displayName: authUser.displayName } : {}),
+            ...(authUser.photoURL ? { photoURL: authUser.photoURL } : {})
+        };
+
+        if (userDoc.id !== userId) {
+            await userRef.set({
+                ...profileUpdate,
+                linkedFromUserId: sourceUserDocId
+            });
+        } else {
+            await userRef.set(profileUpdate, { merge: true });
+        }
+
+        const existingClaims = authUser.customClaims || {};
+        await auth.setCustomUserClaims(userId, {
+            ...existingClaims,
+            role
+        });
+
+        return {
+            success: true,
+            user: publicProfileFromDoc({ id: userId }, profileUpdate)
+        };
+    }
+);
+
+/**
+ * Callable Cloud Function to create an Auth user without switching the admin's session.
+ */
+export const createUserForAdmin = onCall(
+    {
+        timeoutSeconds: 60,
+        memory: '256MiB'
+    },
+    async (request) => {
+        if (!request.auth) {
+            throw new HttpsError(
+                'unauthenticated',
+                'User must be authenticated to create users.'
+            );
+        }
+
+        const callingUserDoc = await usersCollection.doc(request.auth.uid).get();
+        if (!callingUserDoc.exists || callingUserDoc.data().role !== 'admin') {
+            throw new HttpsError(
+                'permission-denied',
+                'Only admin users can create users.'
+            );
+        }
+
+        const email = normalizeEmail(request.data?.email);
+        const password = request.data?.password;
+        const displayName = typeof request.data?.displayName === 'string'
+            ? request.data.displayName.trim()
+            : '';
+
+        if (!email || typeof password !== 'string' || password.length < 6) {
+            throw new HttpsError(
+                'invalid-argument',
+                'A valid email and password are required.'
+            );
+        }
+
+        const userRecord = await auth.createUser({
+            email,
+            password,
+            displayName,
+            emailVerified: false
+        });
+
+        return {
+            success: true,
+            uid: userRecord.uid
+        };
+    }
+);
 
 /**
  * Callable Cloud Function to delete a user (Admin only)

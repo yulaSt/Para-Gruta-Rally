@@ -53,7 +53,7 @@ service cloud.firestore {
       }
 
       function userSelfUpdateAllowedKeys() {
-        return ['displayName', 'name', 'phone', 'photoURL', 'preferences', 'updatedAt', 'lastLogin'];
+        return ['displayName', 'name', 'phone', 'photoURL', 'preferences', 'updatedAt'];
       }
 
       function roleUnchanged() {
@@ -71,8 +71,15 @@ service cloud.firestore {
             && request.resource.data.updatedAt == request.time;
       }
 
+      function validUserSelfLastLoginUpdate() {
+        return isAuthenticated()
+            && uid() == userId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin'])
+            && request.resource.data.lastLogin == request.time;
+      }
+
       allow create: if isAdmin();
-      allow update: if validUserSelfUpdate() || isAdmin();
+      allow update: if validUserSelfUpdate() || validUserSelfLastLoginUpdate() || isAdmin();
       allow delete: if isAdmin();
 
     }
