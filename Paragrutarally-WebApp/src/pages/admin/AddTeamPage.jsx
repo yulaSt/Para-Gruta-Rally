@@ -9,11 +9,9 @@ import {addTeam, getAllInstructors} from '@/services/teamService.js';
 import {getAllKids} from '@/services/kidService.js';
 import {getAvailableVehicles} from '@/services/vehicleService.js'; // NEW: Import for vehicles
 import {createEmptyTeam, validateTeam} from '@/schemas/teamSchema.js';
-import { createUserWithEmailAndPassword, connectAuthEmulator, getAuth, deleteUser } from 'firebase/auth';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { db } from '@/firebase/config.js';
-import { validateUser, prepareUserForFirestore, cleanPhoneNumber } from '@/schemas/userSchema.js';
+import { createUserAsAdmin } from '@/services/adminUserService.jsx';
+import { deleteUserCompletely } from '@/services/userService.js';
+import { validateUser, cleanPhoneNumber } from '@/schemas/userSchema.js';
 import {
     IconUsers as UsersGroup,
     IconPlus as Plus,
@@ -266,47 +264,14 @@ const AddTeamPage = () => {
 
         setIsSubmitting(true);
         let createdInstructorUid = null;
-        let secondaryAppInstance = null;
-        let createdAuthUser = null;
-        let instructorDocCreated = false;
 
         try {
             if (isAddingInlineInstructor) {
-                // Register the instructor
-                const firebaseConfig = {
-                    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-                    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-                    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-                    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-                    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-                    appId: import.meta.env.VITE_FIREBASE_APP_ID
-                };
-
-                const timestamp = Date.now();
-                secondaryAppInstance = initializeApp(firebaseConfig, `CreateInstructor_${timestamp}`);
-                const secondaryAuth = getAuth(secondaryAppInstance);
-
-                const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ||
-                    (typeof process !== 'undefined' && process.env?.VITE_USE_FIREBASE_EMULATORS === 'true');
-                if (useEmulators) {
-                    connectAuthEmulator(secondaryAuth, 'http://127.0.0.1:9099');
-                }
-
-                const userCredential = await createUserWithEmailAndPassword(
-                    secondaryAuth,
-                    inlineInstructor.email,
-                    inlineInstructor.password
-                );
-
-                createdAuthUser = userCredential.user;
-                createdInstructorUid = createdAuthUser.uid;
-
-                // Save instructor to Firestore 'users' collection.
-                // Strip password before persisting — Firebase Auth holds the credential; never store it in Firestore.
                 const { password: _instructorPassword, ...instructorWithoutPassword } = inlineInstructor;
-                const userDoc = prepareUserForFirestore(instructorWithoutPassword, false);
-                await setDoc(doc(db, 'users', createdInstructorUid), userDoc);
-                instructorDocCreated = true;
+                const result = await createUserAsAdmin(instructorWithoutPassword, {
+                    password: inlineInstructor.password
+                });
+                createdInstructorUid = result.uid;
             }
 
             // Now prepare final team data
@@ -320,16 +285,6 @@ const AddTeamPage = () => {
             };
 
             const teamId = await addTeam(finalTeamData);
-
-            // Team created — instructor (if any) is committed. Release the secondary app.
-            if (secondaryAppInstance) {
-                try {
-                    await deleteApp(secondaryAppInstance);
-                } catch (err) {
-                    console.warn('Error during app cleanup:', err);
-                }
-                secondaryAppInstance = null;
-            }
 
             // Update kids' team assignments
             if (formData.kidIds && formData.kidIds.length > 0) {
@@ -355,26 +310,11 @@ const AddTeamPage = () => {
             console.error('❌ Error submitting team:', error);
 
             // Roll back instructor creation if team save failed afterwards.
-            if (createdAuthUser) {
+            if (createdInstructorUid) {
                 try {
-                    await deleteUser(createdAuthUser);
-                } catch (rollbackAuthErr) {
-                    console.warn('⚠️ Could not roll back Auth user — orphaned UID:', createdInstructorUid, rollbackAuthErr);
-                }
-            }
-            if (instructorDocCreated && createdInstructorUid) {
-                try {
-                    await deleteDoc(doc(db, 'users', createdInstructorUid));
-                } catch (rollbackDocErr) {
-                    console.warn('⚠️ Could not roll back Firestore user doc:', createdInstructorUid, rollbackDocErr);
-                }
-            }
-
-            if (secondaryAppInstance) {
-                try {
-                    await deleteApp(secondaryAppInstance);
-                } catch (err) {
-                    console.warn('Error during app cleanup:', err);
+                    await deleteUserCompletely(createdInstructorUid);
+                } catch (rollbackErr) {
+                    console.warn('⚠️ Could not roll back created instructor:', createdInstructorUid, rollbackErr);
                 }
             }
 

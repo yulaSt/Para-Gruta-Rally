@@ -18,6 +18,18 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { PermissionProvider } from '@/hooks/usePermissions';
 import { runTeamsManagementTests, TestData, defaultTeams, defaultInstructors, defaultKids } from './TeamsManagementPage.tests';
 
+const mockCreateUserAsAdmin = vi.hoisted(() => vi.fn());
+const mockDeleteUserCompletely = vi.hoisted(() => vi.fn());
+
+vi.mock('@/services/adminUserService.jsx', () => ({
+    createUserAsAdmin: (...args: unknown[]) => mockCreateUserAsAdmin(...args),
+    DEFAULT_NEW_USER_PASSWORD: '123456',
+}));
+
+vi.mock('@/services/userService.js', () => ({
+    deleteUserCompletely: (...args: unknown[]) => mockDeleteUserCompletely(...args),
+}));
+
 // Mock LanguageContext for UI simplicity
 const mockLanguageContext = {
     t: (key: string, fallback: string, options?: any) => {
@@ -36,8 +48,8 @@ const mockLanguageContext = {
     currentLanguage: 'en'
 };
 
-// We DO NOT mock services here, because we want to test integration with Firestore Emulator.
-// But we might need to mock some non-firebase things if they are annoying.
+// Firestore-backed services stay real. Callable-only user creation is mocked because
+// this suite starts Auth and Firestore emulators, not the Functions emulator.
 
 function parseHostAndPort(hostAndPort: string | undefined): { host: string; port: number } | undefined {
     if (hostAndPort == null) return undefined;
@@ -83,8 +95,45 @@ describeWithFirestoreEmulator('TeamsManagementPage (Integration)', () => {
     });
 
     beforeEach(async () => {
+        vi.clearAllMocks();
         await testEnv.clearFirestore();
         if (auth.currentUser) await signOut(auth);
+
+        mockCreateUserAsAdmin.mockImplementation(async (userData: any, options?: { password?: string }) => {
+            const uid = `mock-created-user-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const email = String(userData.email).trim().toLowerCase();
+
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const adminDb = context.firestore();
+                await adminDb.collection('users').doc(uid).set({
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    lastLogin: new Date(),
+                    ...userData,
+                    email,
+                    emailLower: email,
+                    authProvider: userData.authProvider || 'email',
+                });
+            });
+
+            return {
+                success: true,
+                uid,
+                password: options?.password || '123456',
+            };
+        });
+
+        mockDeleteUserCompletely.mockImplementation(async (userId: string) => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const adminDb = context.firestore();
+                await adminDb.collection('users').doc(userId).delete();
+            });
+
+            return {
+                success: true,
+                deletedUserId: userId,
+            };
+        });
     });
 
     afterAll(async () => {

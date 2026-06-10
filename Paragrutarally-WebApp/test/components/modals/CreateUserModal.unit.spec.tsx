@@ -5,38 +5,11 @@ import CreateUserModal from '@/components/modals/CreateUserModal';
 import { USER_ROLES } from '@/schemas/userSchema';
 
 // Mocks
-const mockCreateUserWithEmailAndPassword = vi.fn();
-const mockConnectAuthEmulator = vi.fn();
-const mockSetDoc = vi.fn();
-const mockGetDoc = vi.fn();
-const mockDeleteApp = vi.fn();
-const mockInitializeApp = vi.fn();
-const mockGetAuth = vi.fn();
+const mockCreateUserAsAdmin = vi.hoisted(() => vi.fn());
 
-vi.mock('firebase/app', () => ({
-  initializeApp: (...args) => mockInitializeApp(...args),
-  deleteApp: (...args) => mockDeleteApp(...args),
-}));
-
-vi.mock('firebase/auth', () => ({
-  getAuth: (...args) => mockGetAuth(...args),
-  createUserWithEmailAndPassword: (...args) => mockCreateUserWithEmailAndPassword(...args),
-  connectAuthEmulator: (...args) => mockConnectAuthEmulator(...args),
-}));
-
-vi.mock('firebase/firestore', () => ({
-  doc: vi.fn((db, collection, id) => ({ path: `${collection}/${id}` })),
-  setDoc: (...args) => mockSetDoc(...args),
-  getDoc: (...args) => mockGetDoc(...args),
-  serverTimestamp: () => 'timestamp',
-  getFirestore: vi.fn(),
-  Timestamp: class {
-    static now() { return { toDate: () => new Date() }; }
-  }
-}));
-
-vi.mock('@/firebase/config.js', () => ({
-  db: {},
+vi.mock('@/services/adminUserService.jsx', () => ({
+  createUserAsAdmin: (...args) => mockCreateUserAsAdmin(...args),
+  DEFAULT_NEW_USER_PASSWORD: '123456',
 }));
 
 // Mock LanguageContext
@@ -54,17 +27,12 @@ describe('CreateUserModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.VITE_USE_FIREBASE_EMULATORS = 'false';
-    // Default mocks behavior
-    mockInitializeApp.mockReturnValue({});
-    mockGetAuth.mockReturnValue({});
-    mockCreateUserWithEmailAndPassword.mockResolvedValue({
-      user: { uid: 'test-uid' },
+    mockCreateUserAsAdmin.mockResolvedValue({
+      success: true,
+      uid: 'test-uid',
+      password: '123456',
     });
-    mockGetDoc.mockResolvedValue({
-      exists: () => true,
-      data: () => ({}),
-    });
-    vi.spyOn(window, 'alert');
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
   it('renders correctly when open', () => {
@@ -104,16 +72,20 @@ describe('CreateUserModal', () => {
     await user.click(screen.getByRole('button', { name: /Create User/i }));
 
     await waitFor(() => {
-      expect(mockInitializeApp).toHaveBeenCalled();
-      expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalledWith(expect.anything(), 'test@example.com', '123456');
-      expect(mockSetDoc).toHaveBeenCalled();
-      expect(mockDeleteApp).toHaveBeenCalled();
+      expect(mockCreateUserAsAdmin).toHaveBeenCalledWith(expect.objectContaining({
+        displayName: 'Test User',
+        name: 'Test Full Name',
+        email: 'test@example.com',
+        phone: '0501234567',
+        role: USER_ROLES.INSTRUCTOR,
+        location: 'Tel Aviv',
+      }));
       expect(onUserCreated).toHaveBeenCalled();
       expect(onClose).toHaveBeenCalled();
     });
   });
 
-  it('connects auth emulator when enabled', async () => {
+  it('does not use client-side Firebase sign-up when creating users', async () => {
     process.env.VITE_USE_FIREBASE_EMULATORS = 'true';
 
     const user = userEvent.setup();
@@ -129,13 +101,13 @@ describe('CreateUserModal', () => {
     await user.click(screen.getByRole('button', { name: /Create User/i }));
 
     await waitFor(() => {
-      expect(mockConnectAuthEmulator).toHaveBeenCalledWith(expect.anything(), 'http://127.0.0.1:9099');
+      expect(mockCreateUserAsAdmin).toHaveBeenCalledTimes(1);
     });
   });
 
   it('handles email already in use error', async () => {
     const user = userEvent.setup();
-    mockCreateUserWithEmailAndPassword.mockRejectedValue({ code: 'auth/email-already-in-use' });
+    mockCreateUserAsAdmin.mockRejectedValue(new Error('This email is already registered'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     
     render(<CreateUserModal isOpen={true} onClose={onClose} onUserCreated={onUserCreated} />);

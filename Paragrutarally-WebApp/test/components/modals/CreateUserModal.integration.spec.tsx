@@ -13,6 +13,12 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+const mockCreateUserAsAdmin = vi.hoisted(() => vi.fn());
+
+vi.mock('@/services/adminUserService.jsx', () => ({
+    createUserAsAdmin: (...args: unknown[]) => mockCreateUserAsAdmin(...args),
+    DEFAULT_NEW_USER_PASSWORD: '123456',
+}));
 
 // Mock firebase/auth specifically for createUserWithEmailAndPassword
 vi.mock('firebase/auth', async (importOriginal) => {
@@ -97,7 +103,7 @@ describeWithFirestoreEmulator('CreateUserModal Integration', () => {
 
     beforeEach(async () => {
         vi.clearAllMocks();
-        vi.spyOn(window, 'alert');
+        vi.spyOn(window, 'alert').mockImplementation(() => {});
 
         await testEnv.clearFirestore();
         if (auth.currentUser) await signOut(auth);
@@ -128,6 +134,30 @@ describeWithFirestoreEmulator('CreateUserModal Integration', () => {
                 email: email,
                 displayName: 'Admin User'
             });
+        });
+
+        mockCreateUserAsAdmin.mockImplementation(async (userData: any) => {
+            const uid = `mock-created-user-${Date.now()}`;
+            const email = String(userData.email).trim().toLowerCase();
+
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const adminDb = context.firestore();
+                await adminDb.collection('users').doc(uid).set({
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    lastLogin: new Date(),
+                    ...userData,
+                    email,
+                    emailLower: email,
+                    authProvider: userData.authProvider || 'email',
+                });
+            });
+
+            return {
+                success: true,
+                uid,
+                password: '123456',
+            };
         });
     });
 

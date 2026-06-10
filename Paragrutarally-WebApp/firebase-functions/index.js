@@ -50,6 +50,37 @@ function normalizeRole(role) {
     return APP_ROLES.has(normalizedRole) ? normalizedRole : null;
 }
 
+function cleanString(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function cleanPhone(value) {
+    return typeof value === 'string' ? value.replace(/\D/g, '') : '';
+}
+
+function buildAdminCreatedUserProfile({ email, displayName, profile, role }) {
+    const now = FieldValue.serverTimestamp();
+    const safeDisplayName = cleanString(profile.displayName) || displayName;
+    const safeName = cleanString(profile.name);
+    const safePhone = cleanPhone(profile.phone);
+    const safeLocation = cleanString(profile.location);
+    const authProvider = cleanString(profile.authProvider) || 'email';
+
+    return {
+        createdAt: now,
+        updatedAt: now,
+        lastLogin: now,
+        displayName: safeDisplayName,
+        email,
+        emailLower: email,
+        name: safeName,
+        phone: safePhone,
+        role,
+        authProvider,
+        ...(safeLocation ? { location: safeLocation } : {})
+    };
+}
+
 function publicProfileFromDoc(doc, data) {
     return {
         id: doc.id,
@@ -226,9 +257,11 @@ export const createUserForAdmin = onCall(
 
         const email = normalizeEmail(request.data?.email);
         const password = request.data?.password;
-        const displayName = typeof request.data?.displayName === 'string'
-            ? request.data.displayName.trim()
-            : '';
+        const displayName = cleanString(request.data?.displayName);
+        const profile = request.data?.profile && typeof request.data.profile === 'object'
+            ? request.data.profile
+            : null;
+        const role = normalizeRole(profile?.role ?? request.data?.role);
 
         if (!email || typeof password !== 'string' || password.length < 6) {
             throw new HttpsError(
@@ -237,16 +270,99 @@ export const createUserForAdmin = onCall(
             );
         }
 
-        const userRecord = await auth.createUser({
+        if (!profile || !role) {
+            throw new HttpsError(
+                'invalid-argument',
+                'A valid user profile with role is required.'
+            );
+        }
+
+        const emailMatchedDoc = await findUserProfileByEmail(email);
+        if (emailMatchedDoc) {
+            throw new HttpsError(
+                'already-exists',
+                'This email is already registered.'
+            );
+        }
+
+        let userRecord;
+        let createdAuthUser = false;
+        let reusedExistingAuthUser = false;
+
+        try {
+            userRecord = await auth.createUser({
+                email,
+                password,
+                displayName,
+                emailVerified: false
+            });
+            createdAuthUser = true;
+        } catch (error) {
+            if (error?.code !== 'auth/email-already-exists') {
+                if (error?.code === 'auth/invalid-email') {
+                    throw new HttpsError('invalid-argument', 'Invalid email address.');
+                }
+                if (error?.code === 'auth/invalid-password') {
+                    throw new HttpsError('invalid-argument', 'Password is too weak.');
+                }
+                throw error;
+            }
+
+            userRecord = await auth.getUserByEmail(email);
+            const existingUserDoc = await usersCollection.doc(userRecord.uid).get();
+            if (existingUserDoc.exists) {
+                throw new HttpsError(
+                    'already-exists',
+                    'This email is already registered.'
+                );
+            }
+
+            await auth.updateUser(userRecord.uid, {
+                password,
+                ...(displayName ? { displayName } : {})
+            });
+            reusedExistingAuthUser = true;
+        }
+
+        const userProfile = buildAdminCreatedUserProfile({
             email,
-            password,
             displayName,
-            emailVerified: false
+            profile,
+            role
         });
+
+        try {
+            await usersCollection.doc(userRecord.uid).set(userProfile);
+            await auth.setCustomUserClaims(userRecord.uid, {
+                ...(userRecord.customClaims || {}),
+                role
+            });
+        } catch (error) {
+            if (createdAuthUser) {
+                try {
+                    await auth.deleteUser(userRecord.uid);
+                } catch (deleteError) {
+                    console.warn('Failed to roll back auth user after profile creation error:', {
+                        uid: userRecord.uid,
+                        error: deleteError?.message || deleteError
+                    });
+                }
+            }
+            console.error('Failed to create admin user profile:', {
+                uid: userRecord.uid,
+                email,
+                error: error?.message || error
+            });
+            throw new HttpsError(
+                'internal',
+                'Failed to create user profile.'
+            );
+        }
 
         return {
             success: true,
-            uid: userRecord.uid
+            uid: userRecord.uid,
+            repairedExistingAuthUser: reusedExistingAuthUser
         };
     }
 );

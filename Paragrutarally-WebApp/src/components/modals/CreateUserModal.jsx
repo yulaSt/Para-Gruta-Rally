@@ -1,15 +1,11 @@
 // src/components/modals/CreateUserModal.jsx - UPDATED WITH CLEAN MODAL STRUCTURE
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword, connectAuthEmulator, getAuth } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { db } from '@/firebase/config.js';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { createUserAsAdmin, DEFAULT_NEW_USER_PASSWORD } from '@/services/adminUserService.jsx';
 import {
     createEmptyUser,
     validateUser,
     validateUserField,
-    prepareUserForFirestore,
     USER_ROLES,
     cleanPhoneNumber
 } from '@/schemas/userSchema.js';
@@ -83,97 +79,37 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
         setErrors({}); // Clear any previous errors
 
         try {
+            const result = await createUserAsAdmin(formData);
 
-            // Get Firebase config from environment variables
-            const firebaseConfig = {
-                apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-                authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-                projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-                storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-                messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-                appId: import.meta.env.VITE_FIREBASE_APP_ID
-            };
+            // Reset form
+            setFormData(createEmptyUser());
+            setErrors({});
 
-            // Create secondary app instance with unique name
-            const timestamp = Date.now();
-            const secondaryApp = initializeApp(firebaseConfig, `CreateUser_${timestamp}`);
-            const secondaryAuth = getAuth(secondaryApp);
+            // Show success message with translations
+            alert(
+                `✅ ${t('users.createSuccess', 'SUCCESS!')}\n\n` +
+                `${t('users.userCreated', 'User has been created successfully!')}\n\n` +
+                `📧 ${t('users.email', 'Email')}: ${formData.email}\n` +
+                `👤 ${t('users.role', 'Role')}: ${t(`users.${formData.role}`, formData.role)}\n` +
+                `🆔 ${t('users.userId', 'User ID')}: ${result.uid}\n\n` +
+                `${t('users.defaultPassword', 'Default password')}: ${result.password || DEFAULT_NEW_USER_PASSWORD}`
+            );
 
-            const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ||
-                (typeof process !== 'undefined' && process.env?.VITE_USE_FIREBASE_EMULATORS === 'true');
-            if (useEmulators) {
-                connectAuthEmulator(secondaryAuth, 'http://127.0.0.1:9099');
+            // Notify parent component
+            if (onUserCreated) {
+                onUserCreated();
             }
-
-
-
-            try {
-                // Create user with secondary auth instance
-                const userCredential = await createUserWithEmailAndPassword(
-                    secondaryAuth,
-                    formData.email,
-                    '123456' // Default password - consider making this configurable
-                );
-
-                const uid = userCredential.user.uid;
-
-                // Prepare user data for Firestore using schema
-                const userDoc = prepareUserForFirestore(formData, false);
-
-                // Create the document using the UID from Firebase Auth
-                await setDoc(doc(db, 'users', uid), userDoc);
-
-                // Verification: Read back the document
-                const verificationDoc = await getDoc(doc(db, 'users', uid));
-                if (verificationDoc.exists()) {
-                    const verificationData = verificationDoc.data();
-                } else {
-                    console.error('❌ VERIFICATION: Document was not created properly');
-                    throw new Error('User document verification failed');
-                }
-
-                // Clean up secondary app
-                await deleteApp(secondaryApp);
-
-                // Reset form
-                setFormData(createEmptyUser());
-                setErrors({});
-
-                // Show success message with translations
-                alert(
-                    `✅ ${t('users.createSuccess', 'SUCCESS!')}\n\n` +
-                    `${t('users.userCreated', 'User has been created successfully!')}\n\n` +
-                    `📧 ${t('users.email', 'Email')}: ${formData.email}\n` +
-                    `👤 ${t('users.role', 'Role')}: ${t(`users.${formData.role}`, formData.role)}\n` +
-                    `🆔 ${t('users.userId', 'User ID')}: ${uid}\n\n` +
-                    `${t('users.defaultPassword', 'Default password')}: 123456`
-                );
-
-                // Notify parent component
-                if (onUserCreated) {
-                    onUserCreated();
-                }
-                onClose();
-
-            } catch (userCreationError) {
-                // Clean up secondary app on error
-                try {
-                    await deleteApp(secondaryApp);
-                } catch (cleanupError) {
-                    console.warn('Error cleaning up secondary app:', cleanupError);
-                }
-                throw userCreationError;
-            }
+            onClose();
 
         } catch (error) {
             console.error('Error creating user:', error);
 
             // Handle specific Firebase errors with proper translations
-            if (error.code === 'auth/email-already-in-use') {
+            if (error.code === 'auth/email-already-in-use' || error.message?.includes('already registered')) {
                 setErrors({ email: t('users.emailInUse', 'This email is already registered') });
-            } else if (error.code === 'auth/invalid-email') {
+            } else if (error.code === 'auth/invalid-email' || error.message?.includes('Invalid email')) {
                 setErrors({ email: t('users.emailInvalid', 'Invalid email address') });
-            } else if (error.code === 'auth/weak-password') {
+            } else if (error.code === 'auth/weak-password' || error.message?.includes('Password is too weak')) {
                 setErrors({ general: t('users.weakPassword', 'Password is too weak') });
             } else if (error.code === 'app/duplicate-app') {
                 setErrors({

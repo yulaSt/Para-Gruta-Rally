@@ -1,68 +1,84 @@
 // src/services/adminUserService.js
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../firebase/config';
+import { functions } from '../firebase/config';
+
+export const DEFAULT_NEW_USER_PASSWORD = '123456';
+
+const normalizeEmail = (email) => (
+    typeof email === 'string' ? email.trim().toLowerCase() : ''
+);
+
+const withoutPassword = (userData) => {
+    const { password: _password, ...profile } = userData;
+    return profile;
+};
 
 /**
  * Create a new user without affecting the current admin session
  * @param {Object} userData - User data for creation
+ * @param {Object} options - Creation options
+ * @param {string} options.password - Optional password override
  * @returns {Promise<Object>} Creation result
  */
-export const createUserAsAdmin = async (userData) => {
+export const createUserAsAdmin = async (userData, options = {}) => {
     try {
-        // First try using Cloud Function (recommended approach)
         const createUser = httpsCallable(functions, 'createUserForAdmin');
+        const normalizedEmail = normalizeEmail(userData.email);
+        const password = options.password || userData.password || DEFAULT_NEW_USER_PASSWORD;
+        const displayName = (userData.displayName || userData.name || '').trim();
+        const profile = {
+            ...withoutPassword(userData),
+            email: normalizedEmail,
+            displayName,
+            authProvider: userData.authProvider || 'email'
+        };
 
         const result = await createUser({
-            email: userData.email,
-            password: '123456', // Default password
-            displayName: userData.displayName
+            email: normalizedEmail,
+            password,
+            displayName,
+            profile
         });
 
         if (result.data.success) {
-            const uid = result.data.uid;
-            const now = serverTimestamp();
-
-            // Create user document in Firestore
-            const normalizedEmail = userData.email.trim().toLowerCase();
-            const userDoc = {
-                createdAt: now,
-                displayName: userData.displayName,
-                email: normalizedEmail,
-                emailLower: normalizedEmail,
-                lastLogin: now,
-                name: userData.name,
-                phone: userData.phone,
-                role: userData.role
-            };
-
-            await setDoc(doc(db, 'users', uid), userDoc);
-
             return {
                 success: true,
-                uid: uid,
-                message: 'User created successfully'
+                uid: result.data.uid,
+                password,
+                repairedExistingAuthUser: result.data.repairedExistingAuthUser === true,
+                message: result.data.repairedExistingAuthUser
+                    ? 'Existing authentication account repaired successfully'
+                    : 'User created successfully'
             };
         } else {
             throw new Error(result.data.error || 'Failed to create user');
         }
     } catch (error) {
         console.error('Error in createUserAsAdmin:', error);
+        const errorCode = error?.code || '';
+        const errorMessage = error?.message || '';
 
         // If Cloud Function is not available, provide clear error message
-        if (error.message.includes('functions') || error.code === 'functions/not-found') {
+        if (errorMessage.includes('functions') || errorCode === 'functions/not-found') {
             throw new Error('Cloud Function not deployed. Please contact system administrator.');
         }
 
         // Handle specific Firebase errors
-        if (error.message.includes('email-already-exists') || error.message.includes('email-already-in-use')) {
+        if (
+            errorCode === 'functions/already-exists' ||
+            errorMessage.includes('email-already-exists') ||
+            errorMessage.includes('email-already-in-use') ||
+            errorMessage.includes('already registered')
+        ) {
             throw new Error('This email is already registered');
-        } else if (error.message.includes('invalid-email')) {
+        } else if (errorCode === 'functions/invalid-argument' && errorMessage.includes('email')) {
             throw new Error('Invalid email address');
-        } else if (error.message.includes('weak-password')) {
+        } else if (errorMessage.includes('invalid-email')) {
+            throw new Error('Invalid email address');
+        } else if (errorMessage.includes('weak-password')) {
             throw new Error('Password is too weak');
         } else {
-            throw new Error(error.message || 'Failed to create user. Please try again.');
+            throw new Error(errorMessage || 'Failed to create user. Please try again.');
         }
     }
 };
