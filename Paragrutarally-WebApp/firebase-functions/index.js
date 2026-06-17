@@ -9,7 +9,8 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 // Set global options for 2nd gen functions
 setGlobalOptions({
     maxInstances: 10,
-    region: 'us-central1'
+    region: 'us-central1',
+    invoker: 'public'
 });
 
 // Initialize Firebase Admin SDK
